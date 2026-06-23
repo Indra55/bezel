@@ -1,0 +1,49 @@
+# Bezel Configuration Template
+# Place this file in: ~/.config/bezel/config.toml
+
+# Customize how thick the edge zones are (0.08 means 8% of the trackpad)
+[zones]
+left_width = 0.08
+right_width = 0.08
+top_height = 0.08
+bottom_height = 0.08
+
+# ---- Left Zone Gestures ----
+[gestures.left.up]
+action = "command"
+cmd = "wpctl set-volume @DEFAULT_SINK@ 5%+"
+
+[gestures.left.down]
+action = "command"
+cmd = "wpctl set-volume @DEFAULT_SINK@ 5%-"
+
+# ---- Right Zone Gestures ----
+[gestures.right.up]
+action = "command"
+cmd = "brightnessctl set 10%+"
+
+[gestures.right.down]
+action = "command"
+cmd = "brightnessctl set 10%-"
+
+# ---- Top Zone Gestures ----
+[gestures.top.left]
+action = "command"
+cmd = "hyprctl dispatch workspace e-1"
+
+[gestures.top.right]
+action = "command"
+cmd = "hyprctl dispatch workspace e+1"
+
+# ---- Bottom Zone Gestures ----
+[gestures.bottom.left]
+action = "command"
+cmd = "playerctl previous"
+
+[gestures.bottom.right]
+action = "command"
+cmd = "playerctl next"
+
+[gestures.bottom.tap]
+action = "command"
+cmd = "playerctl play-pause"
