@@ -36,13 +36,24 @@ elif [ "$INSTALL_MODE" = "download" ]; then
     echo "[1/6] Downloading prebuilt Bezel binary..."
     mkdir -p ~/.local/bin
     if ! curl -sSfL "$LATEST_RELEASE_URL" -o "$HOME/.local/bin/bezel"; then
-        echo "Error: Failed to download prebuilt binary. The release might not exist yet."
-        echo "Please compile from source using: cargo install --git $REPO_URL"
-        exit 1
+        echo "      Prebuilt binary not found (release may not exist yet)."
+        if command -v cargo &> /dev/null; then
+            echo "      Cargo detected. Falling back to source build..."
+            echo "[1/6] Building Bezel binary from git (this might take a minute)..."
+            cargo install --git "$REPO_URL" --root "$HOME/.local"
+            BIN_DEST="$HOME/.local/bin/bezel"
+            echo "[2/6] Installed binary to ~/.local/bin/bezel"
+        else
+            echo "Error: Failed to download prebuilt binary."
+            echo "Please install Rust/Cargo (https://rustup.rs) to compile from source,"
+            echo "or wait for a prebuilt release."
+            exit 1
+        fi
+    else
+        chmod +x "$HOME/.local/bin/bezel"
+        echo "[2/6] Installed binary to ~/.local/bin/bezel"
+        BIN_DEST="$HOME/.local/bin/bezel"
     fi
-    chmod +x "$HOME/.local/bin/bezel"
-    echo "[2/6] Installed binary to ~/.local/bin/bezel"
-    BIN_DEST="$HOME/.local/bin/bezel"
 fi
 
 if [[ ":$PATH:" != *":$(dirname "$BIN_DEST"):"* ]]; then
@@ -109,8 +120,8 @@ echo ""
 echo "--- Install Complete ---"
 if [ "$NEEDS_RELOGIN" -eq 1 ]; then
     echo "WARNING: You were just added to the 'input' group."
-    echo "You MUST log out and log back in for permissions to apply."
-    echo "Once logged back in, the service will start working automatically."
+    echo "You MUST reboot your computer for permissions to apply."
+    echo "Once rebooted, the service will start working automatically."
 else
     echo "Bezel is now running in the background."
     echo "You can check its status with:"

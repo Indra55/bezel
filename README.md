@@ -31,7 +31,7 @@ Normally we'd just tell you to `yay -S bezel`, but the AUR is currently experien
 ### Nix
 You can run Bezel directly using Nix:
 ```sh
-nix run github:indra55/bezel
+nix run --no-write-lock-file github:indra55/bezel
 ```
 
 ## Setup
@@ -39,7 +39,22 @@ nix run github:indra55/bezel
 Add yourself to the `input` group (required on all distros):
 ```sh
 sudo usermod -aG input $USER
-# log out and back in after this
+# reboot your computer after this
+```
+
+**NixOS Users:** Add `"input"` to your `users.users.<name>.extraGroups` instead of using `usermod`.
+
+If you still get `Permission denied (os error 13)` after rebooting, you may need a custom udev rule. Create `/etc/udev/rules.d/99-input.rules`:
+```udev
+KERNEL=="event*", SUBSYSTEM=="input", GROUP="input", MODE="0660"
+```
+Then reload udev rules with `sudo udevadm control --reload-rules && sudo udevadm trigger`.
+
+**NixOS Users:** Add this to your `configuration.nix` instead of creating the file manually:
+```nix
+services.udev.extraRules = ''
+  KERNEL=="event*", SUBSYSTEM=="input", GROUP="input", MODE="0660"
+'';
 ```
 
 ### Configuration
