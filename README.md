@@ -1,7 +1,7 @@
 # Bezel
 
 Bezel is a Linux daemon that provides customizable trackpad edge gestures.
-It intercepts raw trackpad inputs via libinput/evdev and dispatches shell
+It intercepts raw trackpad inputs via evdev and dispatches shell
 commands based on directional swipes or taps along the edges (zones) of your trackpad.
 
 <p align="center">
@@ -12,105 +12,68 @@ commands based on directional swipes or taps along the edges (zones) of your tra
 
 ## Installation
 
-Bezel features a smart installer that adapts to your preferred installation method. It automatically handles permissions, `udev` rules, and the background `systemd` service.
+Bezel is Linux-only (Wayland required).
 
-### 1. Quick Install (Prebuilt Binary)
-
-The easiest way to install Bezel is to download the prebuilt binary and run the setup automatically:
-
+### Prebuilt binary
 ```sh
 curl -sSfL https://raw.githubusercontent.com/indra55/bezel/main/install.sh | bash
 ```
 
-### 2. Cargo Install (From Source)
-
-If you prefer to compile from source but don't want to clone the repository manually, you can use Cargo. The installer will detect the pre-installed binary and skip downloading:
-
+### From source
 ```sh
-# 1. Compile and install binary
 cargo install --git https://github.com/indra55/bezel
-
-# 2. Run setup for permissions and service
-curl -sSfL https://raw.githubusercontent.com/indra55/bezel/main/install.sh | bash
 ```
 
-### 3. Local Install (Development)
+### Arch Linux
 
-If you are developing or testing local changes:
+Normally we'd just tell you to `yay -S bezel`, but the AUR is currently experiencing a massive malware apocalypse. Someone adopted 1,500 orphaned packages and turned them into malware, so Arch had to disable new account registrations. We have our `PKGBUILD` ready to go, but until they put out the fire, you'll have to use the prebuilt binary or build from source like a normal person. Stay safe out there!
 
+### Nix
+You can run Bezel directly using Nix:
 ```sh
-# 1. Clone repository
-git clone https://github.com/indra55/bezel
-cd bezel
-
-# 2. Run local installer
-./install.sh
+nix run github:indra55/bezel
 ```
 
-## Configuration
+## Setup
 
-Bezel uses a configuration file located at `~/.config/bezel/config.toml`. The installer will automatically create a default template for you.
+Add yourself to the `input` group (required on all distros):
+```sh
+sudo usermod -aG input $USER
+# log out and back in after this
+```
 
-To define a gesture, specify the zone and direction, and the command to run. For example, to bind a top-left swipe to changing workspaces:
+### Configuration
+Bezel looks for its configuration at `~/.config/bezel/config.toml`.
+
+To define a gesture, specify the zone and direction, and the command to run:
 ```toml
 [gestures.top.left]
 action = "command"
 cmd = "hyprctl dispatch workspace e-1"
 ```
+*(See `config.toml.example` in this repo for a complete template).*
 
-For a complete working configuration with all default zones, refer to the `config.toml.example` file in this repository.
+### Autostart
+Start Bezel when your Wayland compositor starts. **Void Linux / non-systemd** users should also use this method instead of a background service.
 
-## Advanced / Manual Setup
-
-If you prefer to configure everything manually instead of using the installer, follow these steps:
-
-### Prerequisites
-[Install Rust](https://rustup.rs/) to compile the project. You must also have access to the `input` group to read raw device events.
-
-Ensure your user is in the `input` group:
-```sh
-sudo usermod -aG input $USER
-```
-*(You will need to log out and log back in for this to take effect).*
-
-To allow the program to create a virtual trackpad for passthrough without requiring root, configure a udev rule for `uinput`:
-```sh
-echo 'KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules
-sudo udevadm control --reload-rules && sudo udevadm trigger
+For **Hyprland** (`~/.config/hypr/hyprland.conf`):
+```conf
+exec-once = bezel
 ```
 
-### Build and Move Binary
-```sh
-cargo build --release
-mkdir -p ~/.local/bin
-cp target/release/bezel ~/.local/bin/
+For **Sway** (`~/.config/sway/config`):
+```conf
+exec bezel
 ```
 
-### Background Systemd Service
-Create a file at `~/.config/systemd/user/bezel.service`:
-```ini
-[Unit]
-Description=Bezel Trackpad Gestures
-After=graphical-session.target
-
-[Service]
-ExecStart=%h/.local/bin/bezel
-Restart=always
-RestartSec=3
-
-[Install]
-WantedBy=default.target
-```
-
-Then enable and start it:
-```sh
-systemctl --user daemon-reload
-systemctl --user enable --now bezel.service
+For **Niri** (`~/.config/niri/config.kdl`):
+```conf
+spawn-at-startup "bezel"
 ```
 
 ## Troubleshooting
 
-If the daemon grabs the device exclusively and hard-crashes without releasing it, trackpad movement will stop. If your trackpad stops responding, simply restart the background service:
+If your trackpad stops responding, restart the service:
 ```sh
 systemctl --user restart bezel.service
 ```
