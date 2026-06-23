@@ -12,7 +12,10 @@ CONFIG_EXAMPLE_URL="https://raw.githubusercontent.com/indra55/bezel/main/config.
 
 LOCAL_VERSION="none"
 if command -v bezel &> /dev/null; then
-    LOCAL_VERSION=$(bezel --version 2>/dev/null | awk '{print $2}' || echo "unknown")
+    LOCAL_VERSION=$(timeout 1 bezel --version 2>/dev/null | awk '{print $2}')
+    if [ -z "$LOCAL_VERSION" ]; then
+        LOCAL_VERSION="unknown"
+    fi
     BIN_DEST="$(command -v bezel)"
 fi
 
