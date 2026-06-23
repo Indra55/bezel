@@ -1,7 +1,14 @@
 # Bezel
 
-Bezel is a Linux daemon that provides customizable trackpad edge gestures. It intercepts raw trackpad inputs via libinput/evdev and dispatches shell commands based on directional swipes or taps along the edges (zones) of your trackpad.
+Bezel is a Linux daemon that provides customizable trackpad edge gestures.
+It intercepts raw trackpad inputs via libinput/evdev and dispatches shell
+commands based on directional swipes or taps along the edges (zones) of your trackpad.
 
+<p align="center">
+  <img width="400" src="demo.png" alt="Bezel Demo">
+</p>
+
+<br clear="right">
 ## Installation
 
 Bezel features a smart installer that adapts to your preferred installation method. It automatically handles permissions, `udev` rules, and the background `systemd` service.
