@@ -9,6 +9,7 @@ commands based on directional swipes or taps along the edges (zones) of your tra
 </p>
 
 <br clear="right">
+
 ## Installation
 
 Bezel features a smart installer that adapts to your preferred installation method. It automatically handles permissions, `udev` rules, and the background `systemd` service.
