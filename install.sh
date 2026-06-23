@@ -37,6 +37,7 @@ if [ "$INSTALL_MODE" = "source" ]; then
     if [ -f "$BIN_DEST" ]; then
         echo "      Backing up existing binary to $BIN_DEST.bak"
         cp "$BIN_DEST" "$BIN_DEST.bak"
+        rm -f "$BIN_DEST"
     fi
     cp target/release/bezel ~/.local/bin/
     BIN_DEST="$HOME/.local/bin/bezel"
@@ -60,6 +61,7 @@ else
     if [ -f "$BIN_DEST" ]; then
         echo "      Backing up existing binary to $BIN_DEST.bak"
         cp "$BIN_DEST" "$BIN_DEST.bak"
+        rm -f "$BIN_DEST"
     fi
 
     if ! curl -sSfL "$LATEST_RELEASE_URL" -o "$HOME/.local/bin/bezel"; then
