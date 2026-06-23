@@ -1,36 +1,63 @@
 #!/usr/bin/env bash
 set -e
 
-echo "--- Bezel Installer ---"
+echo "--- Bezel Smart Installer ---"
 
-if ! command -v cargo &> /dev/null; then
-    echo "Error: Rust/Cargo not found. Install from https://rustup.rs"
-    exit 1
+INSTALL_MODE="unknown"
+BIN_DEST="$HOME/.local/bin/bezel"
+REPO_URL="https://github.com/indra55/bezel"
+LATEST_RELEASE_URL="$REPO_URL/releases/latest/download/bezel-linux-amd64"
+CONFIG_EXAMPLE_URL="https://raw.githubusercontent.com/indra55/bezel/main/config.toml.example"
+
+if [ -f "Cargo.toml" ] && grep -q 'name = "bezel"' Cargo.toml 2>/dev/null; then
+    INSTALL_MODE="source"
+elif command -v bezel &> /dev/null; then
+    INSTALL_MODE="preinstalled"
+    BIN_DEST="$(command -v bezel)"
+else
+    INSTALL_MODE="download"
 fi
 
-if [ ! -f "Cargo.toml" ]; then
-    echo "Error: Run this script from the project root directory."
-    exit 1
+if [ "$INSTALL_MODE" = "source" ]; then
+    if ! command -v cargo &> /dev/null; then
+        echo "Error: Rust/Cargo not found. Install from https://rustup.rs"
+        exit 1
+    fi
+    echo "[1/6] Building Bezel binary from source (this might take a minute)..."
+    cargo build --release
+    echo "[2/6] Installing binary to ~/.local/bin/bezel..."
+    mkdir -p ~/.local/bin
+    cp target/release/bezel ~/.local/bin/
+    BIN_DEST="$HOME/.local/bin/bezel"
+elif [ "$INSTALL_MODE" = "preinstalled" ]; then
+    echo "[1/6] Found existing Bezel binary at $BIN_DEST. Skipping build."
+    echo "[2/6] Skipping binary installation."
+elif [ "$INSTALL_MODE" = "download" ]; then
+    echo "[1/6] Downloading prebuilt Bezel binary..."
+    mkdir -p ~/.local/bin
+    if ! curl -sSfL "$LATEST_RELEASE_URL" -o "$HOME/.local/bin/bezel"; then
+        echo "Error: Failed to download prebuilt binary. The release might not exist yet."
+        echo "Please compile from source using: cargo install --git $REPO_URL"
+        exit 1
+    fi
+    chmod +x "$HOME/.local/bin/bezel"
+    echo "[2/6] Installed binary to ~/.local/bin/bezel"
+    BIN_DEST="$HOME/.local/bin/bezel"
 fi
 
-# 1. Build the release binary
-echo "[1/6] Building Bezel binary (this might take a minute)..."
-cargo build --release
-
-# 2. Install binary
-echo "[2/6] Installing binary to ~/.local/bin/bezel..."
-mkdir -p ~/.local/bin
-cp target/release/bezel ~/.local/bin/
-
-if [[ ":$PATH:" != *":$HOME/.local/bin:"* ]]; then
-    echo "      NOTE: ~/.local/bin is not in your PATH. Add it to your shell profile."
+if [[ ":$PATH:" != *":$(dirname "$BIN_DEST"):"* ]]; then
+    echo "      NOTE: $(dirname "$BIN_DEST") is not in your PATH. Add it to your shell profile."
 fi
 
 # 3. Setup Default Config Template
 echo "[3/6] Setting up default configuration template..."
 mkdir -p ~/.config/bezel
 if [ ! -f ~/.config/bezel/config.toml ]; then
-    cp config.toml.example ~/.config/bezel/config.toml
+    if [ -f "config.toml.example" ]; then
+        cp config.toml.example ~/.config/bezel/config.toml
+    else
+        curl -sSfL "$CONFIG_EXAMPLE_URL" -o ~/.config/bezel/config.toml || echo "      Warning: Could not download config template."
+    fi
     echo "      Created default config at ~/.config/bezel/config.toml"
 else
     echo "      Config already exists at ~/.config/bezel/config.toml (skipping)"
@@ -56,13 +83,13 @@ fi
 # 6. Setup Systemd Service
 echo "[6/6] Configuring background service..."
 mkdir -p ~/.config/systemd/user/
-cat << 'EOF' > ~/.config/systemd/user/bezel.service
+cat << EOF > ~/.config/systemd/user/bezel.service
 [Unit]
 Description=Bezel Trackpad Gestures
 After=graphical-session.target
 
 [Service]
-ExecStart=%h/.local/bin/bezel
+ExecStart=$BIN_DEST
 Restart=always
 RestartSec=3
 
@@ -74,7 +101,8 @@ systemctl --user daemon-reload
 systemctl --user enable bezel.service
 
 if [ "$NEEDS_RELOGIN" -eq 0 ]; then
-    systemctl --user start bezel.service
+    # Don't fail the install if the service start fails (e.g. binary not yet functional)
+    systemctl --user start bezel.service || true
 fi
 
 echo ""

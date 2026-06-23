@@ -2,21 +2,42 @@
 
 Bezel is a Linux daemon that provides customizable trackpad edge gestures. It intercepts raw trackpad inputs via libinput/evdev and dispatches shell commands based on directional swipes or taps along the edges (zones) of your trackpad.
 
-## Quick Installation (Recommended)
+## Installation
 
-The easiest way to install and set up Bezel to run automatically in the background is using the provided installation script. 
+Bezel features a smart installer that adapts to your preferred installation method. It automatically handles permissions, `udev` rules, and the background `systemd` service.
 
-1. Navigate to the project directory:
-   ```sh
-   cd bezel
-   ```
+### 1. Quick Install (Prebuilt Binary)
 
-2. Run the automated installer:
-   ```sh
-   ./install.sh
-   ```
+The easiest way to install Bezel is to download the prebuilt binary and run the setup automatically:
 
-The script will handle compiling the program, adding your user to the necessary groups, setting up the `udev` permissions, and creating a background systemd service.
+```sh
+curl -sSfL https://raw.githubusercontent.com/indra55/bezel/main/install.sh | bash
+```
+
+### 2. Cargo Install (From Source)
+
+If you prefer to compile from source but don't want to clone the repository manually, you can use Cargo. The installer will detect the pre-installed binary and skip downloading:
+
+```sh
+# 1. Compile and install binary
+cargo install --git https://github.com/indra55/bezel
+
+# 2. Run setup for permissions and service
+curl -sSfL https://raw.githubusercontent.com/indra55/bezel/main/install.sh | bash
+```
+
+### 3. Local Install (Development)
+
+If you are developing or testing local changes:
+
+```sh
+# 1. Clone repository
+git clone https://github.com/indra55/bezel
+cd bezel
+
+# 2. Run local installer
+./install.sh
+```
 
 ## Configuration
 
@@ -31,19 +52,11 @@ cmd = "hyprctl dispatch workspace e-1"
 
 For a complete working configuration with all default zones, refer to the `config.toml.example` file in this repository.
 
-## Quick Cargo Install (Advanced Testers)
+## Advanced / Manual Setup
 
-If you know what you are doing and just want the binary compiled and placed in `~/.cargo/bin`, you can skip cloning the repository entirely:
-```sh
-cargo install --git https://github.com/indra55/bezel
-```
-*(Note: This skips the install script. You will still need to manually configure the `input` group, `udev` rules, and the background service as detailed below).*
+If you prefer to configure everything manually instead of using the installer, follow these steps:
 
-## Advanced / Manual Installation
-
-If you prefer to configure everything manually instead of using `install.sh`, follow these steps:
-
-### 1. Prerequisites
+### Prerequisites
 [Install Rust](https://rustup.rs/) to compile the project. You must also have access to the `input` group to read raw device events.
 
 Ensure your user is in the `input` group:
@@ -58,14 +71,14 @@ echo 'KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput
 sudo udevadm control --reload-rules && sudo udevadm trigger
 ```
 
-### 2. Build and Move Binary
+### Build and Move Binary
 ```sh
 cargo build --release
 mkdir -p ~/.local/bin
 cp target/release/bezel ~/.local/bin/
 ```
 
-### 3. Background Systemd Service
+### Background Systemd Service
 Create a file at `~/.config/systemd/user/bezel.service`:
 ```ini
 [Unit]
