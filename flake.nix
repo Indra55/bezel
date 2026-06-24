@@ -3,15 +3,18 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-      in {
-        packages.default = pkgs.rustPlatform.buildRustPackage {
+  outputs = { self, nixpkgs }:
+    let
+      forAllSystems = callback:
+      nixpkgs.lib.genAttrs [
+        "x86_64-linux"
+        "aarch64-linux"
+      ] (system: callback nixpkgs.legacyPackages.${system});
+
+      make-package = pkgs: {
+        default = pkgs.rustPlatform.buildRustPackage {
           pname = "bezel";
           version = "0.1.0";
           src = ./.;
@@ -21,5 +24,8 @@
           nativeBuildInputs = [ pkgs.pkg-config ];
           buildInputs = [ pkgs.udev ];
         };
-      });
+      };
+    in {
+      packages = forAllSystems make-package;
+    };
 }
