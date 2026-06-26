@@ -21,7 +21,6 @@ pub struct SlotState {
     pub start_time: Option<Instant>,
     pub assigned_zone: Option<Zone>,
     pub needs_zone_check: bool,
-    pub touch_down_sent: bool,
 }
 
 pub fn find_trackpad() -> Result<Device> {
