@@ -32,7 +32,7 @@ Normally we'd just tell you to `yay -S bezel`, but the AUR is currently experien
 ### Nix
 You can run Bezel directly using Nix:
 ```sh
-nix run --no-write-lock-file github:indra55/bezel
+nix run github:indra55/bezel
 ```
 
 ## Setup
