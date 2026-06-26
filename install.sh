@@ -7,7 +7,15 @@ INSTALL_MODE="unknown"
 NEEDS_RELOGIN=0
 BIN_DEST="$HOME/.local/bin/bezel"
 REPO_URL="https://github.com/indra55/bezel"
-LATEST_RELEASE_URL="$REPO_URL/releases/latest/download/bezel-linux-amd64"
+
+ARCH=$(uname -m)
+case "$ARCH" in
+    x86_64)  RUST_TARGET="x86_64-unknown-linux-gnu" ;;
+    aarch64) RUST_TARGET="aarch64-unknown-linux-gnu" ;;
+    *)       echo "Error: Unsupported architecture: $ARCH"; exit 1 ;;
+esac
+
+LATEST_RELEASE_URL="$REPO_URL/releases/latest/download/bezel-$RUST_TARGET"
 CONFIG_EXAMPLE_URL="https://raw.githubusercontent.com/indra55/bezel/main/config.toml.example"
 
 LOCAL_VERSION="none"
