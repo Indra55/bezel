@@ -6,6 +6,8 @@ on:
   push:
     paths:
       - 'flake.nix'
+  schedule:
+    - cron: "0 0 * * *"
 
 permissions:
   contents: write
