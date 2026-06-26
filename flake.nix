@@ -2,30 +2,33 @@
   description = "Bezel - trackpad edge gesture daemon";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    nixpkgs.url = "github:yzhou216/nixpkgs?ref=bezel-init"; # TODO: wait for merge into Nixpkgs master
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
-  outputs = { self, nixpkgs }:
-    let
-      forAllSystems = callback:
-      nixpkgs.lib.genAttrs [
-        "x86_64-linux"
-        "aarch64-linux"
-      ] (system: callback nixpkgs.legacyPackages.${system});
-
-      make-package = pkgs: {
-        default = pkgs.rustPlatform.buildRustPackage {
+  outputs =
+    {
+      nixpkgs,
+      flake-utils,
+      ...
+    }:
+    flake-utils.lib.eachDefaultSystem (
+      system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+      in
+      {
+        # Build with `$ nix build .#default`
+        packages.default = pkgs.bezel.overrideAttrs (old: {
           pname = "bezel";
-          version = "0.1.0";
+          version = (builtins.fromTOML (builtins.readFile ./Cargo.toml)).package.version;
           src = ./.;
-          cargoLock.lockFile = ./Cargo.lock;
-
-          # evdev and uinput crates typically require libudev to build
-          nativeBuildInputs = [ pkgs.pkg-config ];
-          buildInputs = [ pkgs.udev ];
-        };
-      };
-    in {
-      packages = forAllSystems make-package;
-    };
+          cargoHash = "";
+          cargoSha256 = "";
+          cargoDeps = pkgs.rustPlatform.importCargoLock {
+            lockFile = ./Cargo.lock;
+          };
+        });
+      }
+    );
 }
