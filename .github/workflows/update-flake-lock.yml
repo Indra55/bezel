@@ -4,6 +4,8 @@ name: Update flake.lock
 on:
   workflow_dispatch:
   push:
+    branches:
+      - main
     paths:
       - 'flake.nix'
   schedule:
