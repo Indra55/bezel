@@ -49,3 +49,10 @@ cmd = "playerctl next"
 [gestures.bottom.tap]
 action = "command"
 cmd = "playerctl play-pause"
+
+# ---- OSD Configuration ----
+[osd]
+enabled = false
+backend = "notify-send" # options: "notify-send", "swayosd", "pipe"
+canonical_hints = false # set to true if using mako or notify-osd
+# pipe_path = "/tmp/bezel-osd" # only if backend is "pipe"

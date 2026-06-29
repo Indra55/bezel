@@ -48,6 +48,8 @@ pub struct OsdConfig {
     #[serde(default = "default_osd_backend")]
     pub backend: String,
     #[serde(default)]
+    pub canonical_hints: Option<bool>,
+    #[serde(default)]
     pub pipe_path: Option<String>,
 }
 
@@ -91,6 +93,7 @@ impl Default for OsdConfig {
         OsdConfig {
             enabled: false,
             backend: default_osd_backend(),
+            canonical_hints: None,
             pipe_path: None,
         }
     }

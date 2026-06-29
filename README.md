@@ -120,6 +120,14 @@ cmd = "hyprctl dispatch workspace e-1"
 ```
 *(See `config.toml.example` in this repo for a complete template).*
 
+To configure OSD labels, add the following:
+```toml
+[osd]
+enabled = true
+backend = "notify-send" # Valid options: "notify-send", "swayosd", "pipe"
+canonical_hints = false # Set to true only if using mako or notify-osd
+```
+
 **NixOS Users:** After importing the Home Manager module you can also customize Bezel using the `services.bezel.config` option. See `config.nix.example` for a complete template.
 
 ### Autostart
@@ -145,6 +153,23 @@ spawn-at-startup "~/.local/bin/bezel"
 ```
 
 ## Troubleshooting
+
+### OSD Notifications Not Showing
+
+If OSD notifications (`notify-send`) fail or don't show up when Bezel is run as a `systemd` service, your compositor might not be exporting the D-Bus environment properly. You can check the logs to see if `notify-send` is exiting with an error. 
+
+To fix this, add the following to your compositor's startup config to import the session variables:
+
+**Hyprland:**
+```conf
+exec-once = systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS
+```
+
+**Sway:**
+```conf
+exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK DBUS_SESSION_BUS_ADDRESS
+```
+*(Niri does this automatically).*
 
 ### Debugging Logs
 
