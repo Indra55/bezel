@@ -95,6 +95,19 @@ spawn-at-startup "~/.local/bin/bezel"
 
 ## Troubleshooting
 
+### Debugging Logs
+
+To enable more detailed logging, you can set the `BEZEL_LOG` environment variable. Valid log levels are `error`, `warn`, `info`, `debug`, and `trace`. For example:
+```sh
+BEZEL_LOG=debug bezel
+```
+If you are running Bezel as a systemd service, you can run `systemctl --user edit bezel.service` and add the following to the override file:
+```ini
+[Service]
+Environment="BEZEL_LOG=debug"
+```
+Then restart the service.
+
 If your trackpad stops responding, restart the service:
 ```sh
 systemctl --user restart bezel.service
