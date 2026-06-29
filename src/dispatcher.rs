@@ -1,4 +1,4 @@
-use std::process::Command;
+use tokio::process::Command;
 use tracing::{debug, error, info};
 
 use crate::gesture::ActionCommand;
@@ -16,7 +16,7 @@ pub async fn run_dispatcher(
         let cmd = action.cmd.clone();
         
         tokio::spawn(async move {
-            match Command::new("sh").arg("-c").arg(&cmd).output() {
+            match Command::new("sh").arg("-c").arg(&cmd).output().await {
                 Ok(output) => {
                     if !output.status.success() {
                         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -42,6 +42,7 @@ pub async fn run_dispatcher(
                             .arg("Bezel")
                             .arg(&msg)
                             .output()
+                            .await
                         {
                             error!("Failed to send OSD notification: {}", e);
                         }
@@ -50,7 +51,7 @@ pub async fn run_dispatcher(
                     if let Some(ref path) = osd_config.pipe_path {
                         let path_clone = path.clone();
                         tokio::spawn(async move {
-                            if let Err(e) = std::fs::write(&path_clone, format!("{}\n", msg)) {
+                            if let Err(e) = tokio::fs::write(&path_clone, format!("{}\n", msg)).await {
                                 error!("Failed to write to OSD pipe {}: {}", path_clone, e);
                             }
                         });

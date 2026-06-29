@@ -166,6 +166,37 @@ pub async fn run_input_reader(
             match device.fetch_events() {
                 Ok(events) => {
                     for ev in events {
+                        if ev.kind() == InputEventKind::Synchronization(evdev::Synchronization::SYN_DROPPED) {
+                            error!("evdev buffer overflow (SYN_DROPPED). Resetting tracking state to prevent freeze.");
+                            slots = Default::default();
+                            active_fingers = 0;
+                            frame_events.clear();
+                            
+                            // Send a quick reset to the virtual device to release any stuck touches
+                            if prev_btn_touch {
+                                let mut output_events = Vec::new();
+                                if let Some(old_code) = btn_tool_for_count(prev_unclaimed_count) {
+                                    output_events.push(InputEvent::new(
+                                        evdev::EventType::KEY, old_code, 0,
+                                    ));
+                                }
+                                output_events.push(InputEvent::new(
+                                    evdev::EventType::KEY, BTN_TOUCH, 0,
+                                ));
+                                output_events.push(InputEvent::new(
+                                    evdev::EventType::SYNCHRONIZATION,
+                                    evdev::Synchronization::SYN_REPORT.0,
+                                    0,
+                                ));
+                                if let Err(e) = virtual_device.emit(&output_events) {
+                                    error!("Failed to recover virtual device: {}", e);
+                                }
+                                prev_btn_touch = false;
+                                prev_unclaimed_count = 0;
+                            }
+                            continue;
+                        }
+
                         if ev.kind() == InputEventKind::Synchronization(evdev::Synchronization::SYN_REPORT) {
                             let entry_slot = current_slot;
                             let mut frame_slot = current_slot;
