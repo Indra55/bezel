@@ -1,3 +1,5 @@
+# vim: filetype=toml
+
 # Bezel Configuration Template
 # Place this file in: ~/.config/bezel/config.toml
 

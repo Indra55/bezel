@@ -1,0 +1,52 @@
+# vim: filetype=nix
+
+# Bezel Configuration Template (Nix variant)
+# Place this in your Home Manager configuration
+
+{ pkgs, ... }:
+let
+  # Helper function to create a command action
+  mkCmd = cmd: {
+    action = "command";
+    cmd = cmd;
+  };
+in
+{
+  services.bezel.config = {
+    # Customize how thick the edge zones are (0.08 means 8% of the trackpad)
+    zones = {
+      left_width = 0.08;
+      right_width = 0.08;
+      top_height = 0.08;
+      bottom_height = 0.08;
+    };
+
+    gestures = {
+      # ---- Left Zone Gestures ----
+      left = {
+        up = mkCmd "${pkgs.wireplumber}/bin/wpctl set-volume @DEFAULT_SINK@ 5%+";
+        down = mkCmd "${pkgs.wireplumber}/bin/wpctl set-volume @DEFAULT_SINK@ 5%-";
+      };
+
+      # ---- Right Zone Gestures ----
+      right = {
+        up = mkCmd "${pkgs.brightnessctl}/bin/brightnessctl set 10%+";
+        down = mkCmd "${pkgs.brightnessctl}/bin/brightnessctl set 10%-";
+      };
+
+      # ---- Top Zone Gestures ----
+      top = {
+        # NOTE: replace these if you're not a Hyprland user!
+        left = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch workspace e-1";
+        right = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch workspace e+1";
+      };
+
+      # ---- Bottom Zone Gestures ----
+      bottom = {
+        left = mkCmd "${pkgs.playerctl}/bin/playerctl previous";
+        right = mkCmd "${pkgs.playerctl}/bin/playerctl next";
+        tap = mkCmd "${pkgs.playerctl}/bin/playerctl play-pause";
+      };
+    };
+  };
+}

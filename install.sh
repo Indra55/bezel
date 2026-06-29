@@ -10,9 +10,12 @@ REPO_URL="https://github.com/indra55/bezel"
 
 ARCH=$(uname -m)
 case "$ARCH" in
-    x86_64)  RUST_TARGET="x86_64-unknown-linux-gnu" ;;
+    x86_64) RUST_TARGET="x86_64-unknown-linux-gnu" ;;
     aarch64) RUST_TARGET="aarch64-unknown-linux-gnu" ;;
-    *)       echo "Error: Unsupported architecture: $ARCH"; exit 1 ;;
+    *)
+        echo "Error: Unsupported architecture: $ARCH"
+        exit 1
+        ;;
 esac
 
 LATEST_RELEASE_URL="$REPO_URL/releases/latest/download/bezel-$RUST_TARGET"
@@ -20,14 +23,14 @@ CONFIG_EXAMPLE_URL="https://raw.githubusercontent.com/indra55/bezel/main/config.
 
 LOCAL_VERSION="none"
 if command -v bezel &> /dev/null; then
-    LOCAL_VERSION=$(timeout 1 bezel --version 2>/dev/null | awk '{print $2}')
+    LOCAL_VERSION=$(timeout 1 bezel --version 2> /dev/null | awk '{print $2}')
     if [ -z "$LOCAL_VERSION" ]; then
         LOCAL_VERSION="unknown"
     fi
     BIN_DEST="$(command -v bezel)"
 fi
 
-if [ -f "Cargo.toml" ] && grep -q 'name = "bezel"' Cargo.toml 2>/dev/null; then
+if [ -f "Cargo.toml" ] && grep -q 'name = "bezel"' Cargo.toml 2> /dev/null; then
     INSTALL_MODE="source"
 else
     INSTALL_MODE="download"
@@ -52,7 +55,7 @@ if [ "$INSTALL_MODE" = "source" ]; then
 else
     echo "[1/6] Fetching latest release info..."
     REMOTE_VERSION=$(curl -w "%{url_effective}\n" -I -L -s -S "$REPO_URL/releases/latest" -o /dev/null | awk -F '/' '{print $NF}')
-    
+
     if [ "$LOCAL_VERSION" != "none" ]; then
         if [ "$LOCAL_VERSION" = "$REMOTE_VERSION" ] || [ "v$LOCAL_VERSION" = "$REMOTE_VERSION" ]; then
             echo "      You are already on the latest version ($LOCAL_VERSION). Reinstalling..."
@@ -65,7 +68,7 @@ else
 
     echo "[2/6] Downloading prebuilt Bezel binary..."
     mkdir -p ~/.local/bin
-    
+
     if [ -f "$BIN_DEST" ]; then
         echo "      Backing up existing binary to $BIN_DEST.bak"
         cp "$BIN_DEST" "$BIN_DEST.bak"
@@ -109,7 +112,11 @@ fi
 # 4. Setup Udev rules
 echo "[4/6] Setting up udev rules for /dev/uinput..."
 echo "      (You may be prompted for your sudo password)"
-echo 'KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"' | sudo tee /etc/udev/rules.d/99-uinput.rules > /dev/null
+sudo rm -f /etc/udev/rules.d/99-uinput.rules # remove old rules
+sudo tee /etc/udev/rules.d/99-bezel.rules > /dev/null << EOF
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_TOUCHPAD}=="1", GROUP="input", MODE="0640"
+KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
+EOF
 sudo udevadm control --reload-rules && sudo udevadm trigger
 
 # 5. Check Input Group
