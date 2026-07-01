@@ -5,7 +5,7 @@ It intercepts raw trackpad inputs via evdev and dispatches shell
 commands based on directional swipes or taps along the edges (zones) of your trackpad.
 
 <p align="center">
-  <img width="400" src="demo.png" alt="Bezel Demo">
+  <img width="700" src="preview.gif" alt="Bezel Demo">
 </p>
 
 <br clear="right">
@@ -151,6 +151,24 @@ For **Niri** (`~/.config/niri/config.kdl`):
 ```conf
 spawn-at-startup "~/.local/bin/bezel"
 ```
+
+### Web Visualizer (Demo)
+
+Bezel includes a web-based visualizer that shows a graphical representation of your trackpad and animates when you perform gestures. It's useful for testing, debugging, or recording demos.
+
+To use the visualizer:
+1. Update your `~/.config/bezel/config.toml` to use the `pipe` OSD backend:
+   ```toml
+   [osd]
+   enabled = true
+   backend = "pipe"
+   ```
+2. Restart Bezel (`systemctl --user restart bezel.service` or restart manually).
+3. Start the visualization server from the root of this repository:
+   ```sh
+   python3 viz/server.py
+   ```
+4. Open `http://localhost:8080` in your web browser. When you perform gestures, the server will read them from the pipe (`/tmp/bezel-osd`) and broadcast them to the webpage in real-time.
 
 ## Troubleshooting
 

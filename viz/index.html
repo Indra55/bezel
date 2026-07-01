@@ -1,0 +1,576 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bezel Visualizer</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #f5f5f7;
+            --chassis-color: #e5e5ea;
+            --trackpad-bg: #e5e5ea;
+            --trackpad-border: rgba(0, 0, 0, 0.1);
+            --key-color: #2c2c2e;
+            --glow-color: rgba(0, 0, 0, 0.25);
+            --text-color: #1d1d1f;
+            --text-secondary: #86868b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            font-family: 'Inter', -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            overflow: hidden;
+            perspective: 1200px;
+        }
+
+        .header {
+            text-align: center;
+            z-index: 10;
+            margin-bottom: 32px;
+        }
+
+        .title {
+            font-size: 26px;
+            font-weight: 700;
+            letter-spacing: 14px;
+            color: #86868b;
+            /* Rust orange */
+            text-transform: uppercase;
+            margin-bottom: 0;
+            text-indent: 14px;
+        }
+
+        .status {
+            display: none;
+        }
+
+        /* Laptop Bottom Half */
+        .laptop-base {
+            position: relative;
+            width: 800px;
+            height: 480px;
+            background: linear-gradient(to bottom, #f2f2f7, #d1d1d6);
+            border-radius: 32px;
+            box-shadow:
+                0 30px 60px rgba(0, 0, 0, 0.15),
+                inset 0 2px 4px rgba(255, 255, 255, 0.8),
+                0 1px 2px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            transform: rotateX(25deg) scale(0.95);
+            transform-style: preserve-3d;
+            transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 1;
+        }
+
+        .laptop-base:hover {
+            transform: rotateX(20deg) scale(0.98);
+        }
+
+        /* Keyboard row */
+        .keyboard-row {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+            width: 100%;
+            padding: 0 40px;
+            margin-bottom: 24px;
+        }
+
+        .key {
+            height: 50px;
+            background-color: var(--key-color);
+            border-radius: 6px;
+            box-shadow:
+                inset 0 -1px 2px rgba(0, 0, 0, 0.5),
+                inset 0 1px 1px rgba(255, 255, 255, 0.1),
+                0 2px 4px rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .key::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 40%;
+            height: 2px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+        }
+
+        .key-modifier {
+            width: 60px;
+        }
+
+        .key-command {
+            width: 75px;
+        }
+
+        .key-space {
+            width: 280px;
+        }
+
+        /* Trackpad Container */
+        .trackpad-container {
+            position: relative;
+            width: 600px;
+            height: 350px;
+        }
+
+        .trackpad {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--trackpad-bg);
+            border: 1px solid var(--trackpad-border);
+            border-radius: 12px;
+            box-shadow:
+                inset 0 2px 4px rgba(0, 0, 0, 0.04),
+                inset 0 -1px 1px rgba(255, 255, 255, 0.6),
+                0 1px 1px rgba(255, 255, 255, 0.5);
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transform-style: preserve-3d;
+        }
+
+        /* Edge Zones */
+        .zone {
+            position: absolute;
+            background: linear-gradient(to right, transparent, transparent);
+            opacity: 0;
+            transition: opacity 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            pointer-events: none;
+        }
+
+        .zone-top {
+            top: 0;
+            left: 10%;
+            right: 10%;
+            height: 35px;
+            background: linear-gradient(to bottom, var(--glow-color), transparent);
+            transform-origin: top;
+        }
+
+        .zone-bottom {
+            bottom: 0;
+            left: 10%;
+            right: 10%;
+            height: 35px;
+            background: linear-gradient(to top, var(--glow-color), transparent);
+            transform-origin: bottom;
+        }
+
+        .zone-left {
+            top: 10%;
+            bottom: 10%;
+            left: 0;
+            width: 35px;
+            background: linear-gradient(to right, var(--glow-color), transparent);
+            transform-origin: left;
+        }
+
+        .zone-right {
+            top: 10%;
+            bottom: 10%;
+            right: 0;
+            width: 35px;
+            background: linear-gradient(to left, var(--glow-color), transparent);
+            transform-origin: right;
+        }
+
+        .zone.active {
+            opacity: 1;
+            transition: opacity 0.05s ease-out;
+        }
+
+        .laptop-indent {
+            position: absolute;
+            bottom: 0;
+            width: 120px;
+            height: 8px;
+            background-color: #d1d1d6;
+            border-radius: 8px 8px 0 0;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        /* Simulated Finger Touch Indicator */
+        .simulated-fingers {
+            position: absolute;
+            width: 44px;
+            height: 44px;
+            background: rgba(255, 255, 255, 0.3);
+            border: 2px solid rgba(255, 255, 255, 0.9);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 5;
+            opacity: 0;
+        }
+
+        /* Last Action Display inside trackpad */
+        .action-display {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--text-color);
+            letter-spacing: -1px;
+            opacity: 0;
+            transform: translateY(10px) scale(0.95) translateZ(20px);
+            transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            text-align: center;
+        }
+
+        .action-display.show {
+            opacity: 1;
+            transform: translateY(0) scale(1) translateZ(20px);
+        }
+
+        .action-direction {
+            font-size: 16px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            margin-top: 4px;
+            letter-spacing: 0;
+        }
+
+        /* OSD Pill - macOS Control Center Style */
+        .osd-pill {
+            width: 220px;
+            height: 36px;
+            margin-top: 32px;
+            background: rgba(0, 0, 0, 0.06);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-radius: 18px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05), inset 0 1px 3px rgba(0, 0, 0, 0.05);
+            display: flex;
+            align-items: center;
+            overflow: hidden;
+            opacity: 0;
+            transform: translateY(20px) scale(0.95);
+            transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 20;
+        }
+
+        .osd-pill.show {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+        }
+
+        .osd-slider-fill {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            background: #ffffff;
+            border-radius: 18px;
+            box-shadow: 0 0 4px rgba(0, 0, 0, 0.08);
+            transition: width 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 1;
+        }
+
+        .osd-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 2;
+            color: #1d1d1f;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0.8;
+        }
+
+        .osd-text {
+            position: relative;
+            z-index: 2;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1d1d1f;
+            letter-spacing: -0.2px;
+            opacity: 0.9;
+            width: 100%;
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="header">
+        <h1 class="title">BEZEL</h1>
+        <div class="status" id="connection-status">
+            <div class="status-dot"></div>
+            <span id="status-text">Disconnected</span>
+        </div>
+    </div>
+
+    <div class="laptop-base">
+        <!-- Minimal Keyboard Representation -->
+        <div class="keyboard-row">
+            <div class="key key-modifier"></div>
+            <div class="key key-modifier"></div>
+            <div class="key key-command"></div>
+            <div class="key key-space"></div>
+            <div class="key key-command"></div>
+            <div class="key key-modifier"></div>
+            <div class="key key-modifier"></div>
+        </div>
+
+        <div class="trackpad-container">
+            <div class="trackpad">
+                <div class="zone zone-top" id="zone-Top"></div>
+                <div class="zone zone-bottom" id="zone-Bottom"></div>
+                <div class="zone zone-left" id="zone-Left"></div>
+                <div class="zone zone-right" id="zone-Right"></div>
+
+                <div class="action-display" id="action-display">
+                    <div id="action-zone">Zone</div>
+                    <div class="action-direction" id="action-dir">Direction</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="laptop-indent"></div>
+    </div>
+
+    <!-- The OSD Pill -->
+    <div class="osd-pill" id="osd-pill">
+        <div class="osd-slider-fill" id="osd-fill" style="width: 50%"></div>
+        <div class="osd-icon" id="osd-icon"></div>
+        <div class="osd-text" id="osd-text"></div>
+    </div>
+
+    <script>
+        const statusEl = document.getElementById('connection-status');
+        const statusText = document.getElementById('status-text');
+
+        const actionDisplay = document.getElementById('action-display');
+        const actionZoneEl = document.getElementById('action-zone');
+        const actionDirEl = document.getElementById('action-dir');
+
+        const osdPill = document.getElementById('osd-pill');
+        const osdIcon = document.getElementById('osd-icon');
+        const osdFill = document.getElementById('osd-fill');
+        const osdText = document.getElementById('osd-text');
+
+        let resetTimeout;
+        let pillTimeout;
+        let activeZoneEl = null;
+
+        let mockVolume = 50;
+        let mockBrightness = 50;
+
+        const icons = {
+            volume: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path><path d="M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>`,
+            volumeMute: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><line x1="23" x2="15" y1="9" y2="17"></line><line x1="15" x2="23" y1="9" y2="17"></line></svg>`,
+            brightness: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="m4.93 4.93 1.41 1.41"></path><path d="m17.66 17.66 1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="m6.34 17.66-1.41 1.41"></path><path d="m19.07 4.93-1.41 1.41"></path></svg>`,
+            workspace: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="14" x="2" y="3" rx="2"></rect><line x1="8" x2="16" y1="21" y2="21"></line><line x1="12" x2="12" y1="17" y2="21"></line></svg>`,
+            prev: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="19 20 9 12 19 4 19 20"></polygon><line x1="5" x2="5" y1="19" y2="5"></line></svg>`,
+            next: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 4 15 12 5 20 5 4"></polygon><line x1="19" x2="19" y1="5" y2="19"></line></svg>`,
+            playPause: `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>`
+        };
+
+        function connectSSE() {
+            const evtSource = new EventSource("/stream");
+
+            evtSource.onopen = function () {
+                statusEl.classList.add('connected');
+                statusText.textContent = 'Listening';
+            };
+
+            evtSource.onmessage = function (event) {
+                const data = event.data.trim();
+                if (!data || data === 'connected') return;
+
+                console.log("Gesture received:", data);
+                const parts = data.split(' ');
+                if (parts.length >= 2) {
+                    const zone = parts[0];
+                    const direction = parts.slice(1).join(' ');
+
+                    showGesture(zone, direction);
+                    handleActionSim(zone, direction);
+                }
+            };
+
+            evtSource.onerror = function (err) {
+                statusEl.classList.remove('connected');
+                statusText.textContent = 'Disconnected';
+                evtSource.close();
+                setTimeout(connectSSE, 3000);
+            };
+        }
+
+        function showGesture(zone, direction) {
+            if (activeZoneEl) {
+                activeZoneEl.classList.remove('active');
+            }
+            const zoneEl = document.getElementById(`zone-${zone}`);
+            if (zoneEl) {
+                void zoneEl.offsetWidth;
+                zoneEl.classList.add('active');
+                activeZoneEl = zoneEl;
+            }
+
+            actionZoneEl.textContent = zone;
+            actionDirEl.textContent = direction;
+
+            actionDisplay.classList.remove('show');
+            void actionDisplay.offsetWidth;
+            actionDisplay.classList.add('show');
+
+            simulateFingers(zone, direction);
+
+            clearTimeout(resetTimeout);
+            resetTimeout = setTimeout(() => {
+                if (activeZoneEl) {
+                    activeZoneEl.classList.remove('active');
+                    activeZoneEl = null;
+                }
+                actionDisplay.classList.remove('show');
+            }, 800);
+        }
+
+        function simulateFingers(zone, direction) {
+            const trackpad = document.querySelector('.trackpad');
+            const fingers = document.createElement('div');
+            fingers.className = 'simulated-fingers';
+
+            let startX, startY, endX, endY;
+            const z = zone.toLowerCase();
+            const d = direction.toLowerCase();
+
+            if (z === 'left') {
+                startX = 6; endX = 6;
+                if (d === 'up') { startY = 80; endY = 20; }
+                else if (d === 'down') { startY = 20; endY = 80; }
+            } else if (z === 'right') {
+                startX = 94; endX = 94;
+                if (d === 'up') { startY = 80; endY = 20; }
+                else if (d === 'down') { startY = 20; endY = 80; }
+            } else if (z === 'top') {
+                startY = 10; endY = 10;
+                if (d === 'left') { startX = 80; endX = 20; }
+                else if (d === 'right') { startX = 20; endX = 80; }
+            } else if (z === 'bottom') {
+                startY = 90; endY = 90;
+                if (d === 'left') { startX = 80; endX = 20; }
+                else if (d === 'right') { startX = 20; endX = 80; }
+                else if (d === 'tap') { startX = 50; endX = 50; startY = 90; endY = 90; }
+            }
+
+            if (startX !== undefined) {
+                fingers.style.left = `${startX}%`;
+                fingers.style.top = `${startY}%`;
+                trackpad.appendChild(fingers);
+
+                // Force reflow to ensure start position is rendered
+                void fingers.offsetWidth;
+
+                // Animate to end position
+                fingers.style.transition = 'all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)';
+                fingers.style.opacity = '1';
+                fingers.style.left = `${endX}%`;
+                fingers.style.top = `${endY}%`;
+
+                // Pulse effect if it's a tap
+                if (d === 'tap') {
+                    fingers.style.transform = 'translate(-50%, -50%) scale(1.3)';
+                }
+
+                // Fade out after movement
+                setTimeout(() => {
+                    fingers.style.opacity = '0';
+                    if (d === 'tap') {
+                        fingers.style.transform = 'translate(-50%, -50%) scale(1)';
+                    }
+                    setTimeout(() => fingers.remove(), 400);
+                }, 400);
+            }
+        }
+
+        function handleActionSim(zone, direction) {
+            const key = `${zone} ${direction}`.toLowerCase();
+            let icon = '';
+            let progress = null;
+            let textStr = null;
+
+            if (key === 'left up') {
+                mockVolume = Math.min(100, mockVolume + 10);
+                icon = mockVolume === 0 ? icons.volumeMute : icons.volume; progress = mockVolume;
+            } else if (key === 'left down') {
+                mockVolume = Math.max(0, mockVolume - 10);
+                icon = mockVolume === 0 ? icons.volumeMute : icons.volume; progress = mockVolume;
+            } else if (key === 'right up') {
+                mockBrightness = Math.min(100, mockBrightness + 10);
+                icon = icons.brightness; progress = mockBrightness;
+            } else if (key === 'right down') {
+                mockBrightness = Math.max(0, mockBrightness - 10);
+                icon = icons.brightness; progress = mockBrightness;
+            } else if (key === 'top left') {
+                icon = icons.workspace; textStr = 'Workspace \u2190'; progress = 100;
+            } else if (key === 'top right') {
+                icon = icons.workspace; textStr = 'Workspace \u2192'; progress = 100;
+            } else if (key === 'bottom left') {
+                icon = icons.prev; textStr = 'Previous Track'; progress = 100;
+            } else if (key === 'bottom right') {
+                icon = icons.next; textStr = 'Next Track'; progress = 100;
+            } else if (key === 'bottom tap') {
+                icon = icons.playPause; textStr = 'Play / Pause'; progress = 100;
+            } else {
+                return;
+            }
+
+            showPill(icon, progress, textStr);
+        }
+
+        function showPill(icon, progress, textStr) {
+            osdIcon.innerHTML = icon;
+            osdText.textContent = textStr ? textStr : '';
+
+            // Adjust the slider fill width (for non-sliders we just fill the whole pill so it acts like a background)
+            if (progress !== null) {
+                osdFill.style.width = `${progress}%`;
+            }
+
+            osdPill.classList.remove('show');
+            void osdPill.offsetWidth;
+            osdPill.classList.add('show');
+
+            clearTimeout(pillTimeout);
+            pillTimeout = setTimeout(() => {
+                osdPill.classList.remove('show');
+            }, 1500);
+        }
+
+        connectSSE();
+    </script>
+</body>
+
+</html>
