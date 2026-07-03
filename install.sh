@@ -114,10 +114,10 @@ echo "[4/6] Setting up udev rules for /dev/uinput..."
 echo "      (You may be prompted for your sudo password)"
 sudo rm -f /etc/udev/rules.d/99-uinput.rules # remove old rules
 sudo tee /etc/udev/rules.d/99-bezel.rules > /dev/null << EOF
-SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_TOUCHPAD}=="1", GROUP="input", MODE="0640"
+SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_TOUCHPAD}=="1", TAG+="uaccess", GROUP="input", MODE="0660"
 KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
 EOF
-sudo udevadm control --reload-rules && sudo udevadm trigger
+sudo udevadm control --reload-rules && sudo udevadm trigger --action=add --subsystem-match=input
 
 # 5. Check Input Group
 echo "[5/6] Checking input group permissions..."
