@@ -238,6 +238,12 @@ pub async fn run_input_reader(
                                                 }
                                             }
                                         } else {
+                                            if slots[frame_slot].active {
+                                                slots[frame_slot] = Default::default();
+                                                if active_fingers > 0 {
+                                                    active_fingers -= 1;
+                                                }
+                                            }
                                             slots[frame_slot].active = true;
                                             slots[frame_slot].claimed = false;
                                             slots[frame_slot].tracking_id = fev.value();
