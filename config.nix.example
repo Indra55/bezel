@@ -37,8 +37,8 @@ in
       # ---- Top Zone Gestures ----
       top = {
         # NOTE: replace these if you're not a Hyprland user!
-        left = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch workspace e-1";
-        right = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch workspace e+1";
+        left = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch \"hl.dsp.focus({workspace='e-1'})\"";
+        right = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch \"hl.dsp.focus({workspace='e+1'})\"";
       };
 
       # ---- Bottom Zone Gestures ----
