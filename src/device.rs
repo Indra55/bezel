@@ -212,6 +212,10 @@ pub async fn run_input_reader(
                                     InputEventKind::AbsAxis(AbsoluteAxisType::ABS_MT_TRACKING_ID) => {
                                         if fev.value() == -1 {
                                             if slots[frame_slot].active {
+                                                debug!(
+                                                    "Touch released in slot {} (claimed: {}, zone: {:?})",
+                                                    frame_slot, slots[frame_slot].claimed, slots[frame_slot].assigned_zone
+                                                );
                                                 if slots[frame_slot].claimed {
                                                     let s = &slots[frame_slot];
                                                     if let (Some(sx), Some(sy)) = (s.start_x, s.start_y) {
@@ -239,6 +243,10 @@ pub async fn run_input_reader(
                                             }
                                         } else {
                                             if slots[frame_slot].active {
+                                                debug!(
+                                                    "Implicit touch release in slot {} (new tracking id {})",
+                                                    frame_slot, fev.value()
+                                                );
                                                 slots[frame_slot] = Default::default();
                                                 if active_fingers > 0 {
                                                     active_fingers -= 1;
@@ -249,6 +257,7 @@ pub async fn run_input_reader(
                                             slots[frame_slot].tracking_id = fev.value();
                                             slots[frame_slot].start_time = Some(Instant::now());
                                             slots[frame_slot].needs_zone_check = true;
+                                            debug!("Touch started in slot {} with tracking id {}", frame_slot, fev.value());
                                             active_fingers += 1;
                                         }
                                     }
@@ -257,6 +266,7 @@ pub async fn run_input_reader(
                                         slots[frame_slot].current_x = val;
                                         if slots[frame_slot].start_x.is_none() {
                                             slots[frame_slot].start_x = Some(val);
+                                            debug!("Slot {} start_x initialized to {}", frame_slot, val);
                                         }
                                     }
                                     InputEventKind::AbsAxis(AbsoluteAxisType::ABS_MT_POSITION_Y) => {
@@ -264,6 +274,7 @@ pub async fn run_input_reader(
                                         slots[frame_slot].current_y = val;
                                         if slots[frame_slot].start_y.is_none() {
                                             slots[frame_slot].start_y = Some(val);
+                                            debug!("Slot {} start_y initialized to {}", frame_slot, val);
                                         }
                                     }
                                     _ => {}
