@@ -33,8 +33,8 @@ in
     };
   };
 
-  config = {
-    environment.systemPackages = lib.optional (cfg.enable && cfg.package != null) cfg.package;
+  config = lib.mkIf cfg.enable {
+    environment.systemPackages = lib.optional (cfg.package != null) cfg.package;
 
     systemd.user.services.bezel = {
       description = "Bezel Trackpad Gestures";
