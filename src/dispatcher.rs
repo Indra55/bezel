@@ -1,8 +1,8 @@
 use tokio::process::Command;
 use tracing::{debug, error, info, warn};
 
-use crate::gesture::ActionCommand;
 use crate::config::OsdConfig;
+use crate::gesture::ActionCommand;
 
 pub async fn run_dispatcher(
     mut rx: tokio::sync::mpsc::Receiver<ActionCommand>,
@@ -36,18 +36,21 @@ pub async fn run_dispatcher(
                         let use_hints = osd_config.canonical_hints.unwrap_or(false);
                         tokio::spawn(async move {
                             let mut c = Command::new("notify-send");
-                            c.arg("-a").arg("Bezel")
-                             .arg("-i").arg("input-touchpad")
-                             .arg("-t").arg("1000")
-                             .arg("-e")
-                             .arg("Bezel")
-                             .arg(&msg);
+                            c.arg("-a")
+                                .arg("Bezel")
+                                .arg("-i")
+                                .arg("input-touchpad")
+                                .arg("-t")
+                                .arg("1000")
+                                .arg("-e")
+                                .arg("Bezel")
+                                .arg(&msg);
 
                             if use_hints {
                                 c.arg("-h")
-                                 .arg("string:x-canonical-private-synchronous:bezel")
-                                 .arg("-h")
-                                 .arg("int:transient:1");
+                                    .arg("string:x-canonical-private-synchronous:bezel")
+                                    .arg("-h")
+                                    .arg("int:transient:1");
                             }
 
                             match c.output().await {
@@ -99,7 +102,10 @@ pub async fn run_dispatcher(
                         }
                     }
 
-                    other => warn!("Unknown OSD backend: '{}'. Valid: notify-send, swayosd, pipe", other),
+                    other => warn!(
+                        "Unknown OSD backend: '{}'. Valid: notify-send, swayosd, pipe",
+                        other
+                    ),
                 }
             }
         }

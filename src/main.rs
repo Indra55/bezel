@@ -1,8 +1,8 @@
 use anyhow::Result;
-use notify::{Watcher, RecursiveMode, Event};
+use notify::{Event, RecursiveMode, Watcher};
 use tokio::sync::{mpsc, watch};
 use tracing::{error, info};
-use tracing_subscriber::{FmtSubscriber, EnvFilter};
+use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod config;
 mod device;
@@ -10,10 +10,10 @@ mod dispatcher;
 mod gesture;
 mod passthrough;
 
-use config::{load_config, get_config_path};
+use config::{get_config_path, load_config};
 use device::run_input_reader;
 use dispatcher::run_dispatcher;
-use gesture::{GestureEvent, ActionCommand};
+use gesture::{ActionCommand, GestureEvent};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -23,12 +23,9 @@ async fn main() -> Result<()> {
         std::process::exit(0);
     }
 
-    let filter = EnvFilter::try_from_env("BEZEL_LOG")
-        .unwrap_or_else(|_| EnvFilter::new("info"));
-        
-    let subscriber = FmtSubscriber::builder()
-        .with_env_filter(filter)
-        .finish();
+    let filter = EnvFilter::try_from_env("BEZEL_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
+
+    let subscriber = FmtSubscriber::builder().with_env_filter(filter).finish();
     tracing::subscriber::set_global_default(subscriber).expect("setting default subscriber failed");
 
     info!("Starting Bezel daemon");
@@ -40,7 +37,6 @@ async fn main() -> Result<()> {
     let (gesture_tx, mut gesture_rx) = mpsc::channel::<GestureEvent>(64); // Input reader bursts
     let (action_tx, action_rx) = mpsc::channel::<ActionCommand>(32); // Lower volume
 
-    
     let config_rx_for_reader = config_rx.clone();
     tokio::spawn(async move {
         if let Err(e) = run_input_reader(config_rx_for_reader, gesture_tx).await {
@@ -54,8 +50,8 @@ async fn main() -> Result<()> {
     });
 
     // Setup hot-reloading for config
-    let mut watcher = notify::recommended_watcher(move |res: Result<Event, notify::Error>| {
-        match res {
+    let mut watcher =
+        notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
             Ok(event) => {
                 if event.kind.is_modify() {
                     info!("Config file modified, reloading...");
@@ -68,8 +64,7 @@ async fn main() -> Result<()> {
                 }
             }
             Err(e) => error!("watch error: {:?}", e),
-        }
-    })?;
+        })?;
 
     let config_path = get_config_path();
     if config_path.exists() {
@@ -82,7 +77,7 @@ async fn main() -> Result<()> {
 
     while let Some(event) = gesture_rx.recv().await {
         let current_config = config_rx.borrow().clone();
-        
+
         if let Some(zone_gestures) = current_config.gestures.get(&event.zone) {
             if let Some(gesture_action) = zone_gestures.get(&event.direction) {
                 if gesture_action.action == "command" {

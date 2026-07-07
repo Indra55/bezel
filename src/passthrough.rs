@@ -1,5 +1,8 @@
 use anyhow::{Context, Result};
-use evdev::{Device, uinput::{VirtualDevice, VirtualDeviceBuilder}};
+use evdev::{
+    uinput::{VirtualDevice, VirtualDeviceBuilder},
+    Device,
+};
 use tracing::info;
 
 pub fn create_virtual_device(real_device: &Device) -> Result<VirtualDevice> {
@@ -12,11 +15,12 @@ pub fn create_virtual_device(real_device: &Device) -> Result<VirtualDevice> {
     }
 
     let mut builder = VirtualDeviceBuilder::new()?.name("Bezel Virtual Trackpad");
+    builder = builder.input_id(real_device.input_id());
 
     if let Some(real_keys) = real_device.supported_keys() {
         builder = builder.with_keys(&real_keys)?;
     }
-    
+
     if let Some(real_abs) = real_device.supported_absolute_axes() {
         if let Ok(abs_state) = real_device.get_abs_state() {
             for axis in real_abs.iter() {
@@ -48,8 +52,10 @@ pub fn create_virtual_device(real_device: &Device) -> Result<VirtualDevice> {
         builder = builder.with_properties(&props)?;
     }
 
-    let virtual_device = builder.build().context("Failed to build virtual uinput device")?;
-    
+    let virtual_device = builder
+        .build()
+        .context("Failed to build virtual uinput device")?;
+
     info!("Created virtual uinput device: 'Bezel Virtual Trackpad'");
     Ok(virtual_device)
 }

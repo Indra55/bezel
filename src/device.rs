@@ -1,7 +1,7 @@
 use anyhow::{bail, Context, Result};
-use evdev::{Device, InputEventKind, AbsoluteAxisType, InputEvent};
-use tracing::{debug, error, info};
+use evdev::{AbsoluteAxisType, Device, InputEvent, InputEventKind};
 use std::time::Instant;
+use tracing::{debug, error, info};
 
 use crate::config::Config;
 use crate::gesture::{classify_gesture, GestureEvent, Zone};
@@ -149,7 +149,10 @@ pub async fn run_input_reader(
     let y_max = y_info.maximum as f32;
     let y_range = y_max - y_min;
 
-    info!("Trackpad bounds: X({} - {}), Y({} - {})", x_min, x_max, y_min, y_max);
+    info!(
+        "Trackpad bounds: X({} - {}), Y({} - {})",
+        x_min, x_max, y_min, y_max
+    );
 
     // We will spawn a blocking task to read from the device since fetch_events is blocking.
     tokio::task::spawn_blocking(move || {
@@ -166,22 +169,28 @@ pub async fn run_input_reader(
             match device.fetch_events() {
                 Ok(events) => {
                     for ev in events {
-                        if ev.kind() == InputEventKind::Synchronization(evdev::Synchronization::SYN_DROPPED) {
+                        if ev.kind()
+                            == InputEventKind::Synchronization(evdev::Synchronization::SYN_DROPPED)
+                        {
                             error!("evdev buffer overflow (SYN_DROPPED). Resetting tracking state to prevent freeze.");
                             slots = Default::default();
                             active_fingers = 0;
                             frame_events.clear();
-                            
+
                             // Send a quick reset to the virtual device to release any stuck touches
                             if prev_btn_touch {
                                 let mut output_events = Vec::new();
                                 if let Some(old_code) = btn_tool_for_count(prev_unclaimed_count) {
                                     output_events.push(InputEvent::new(
-                                        evdev::EventType::KEY, old_code, 0,
+                                        evdev::EventType::KEY,
+                                        old_code,
+                                        0,
                                     ));
                                 }
                                 output_events.push(InputEvent::new(
-                                    evdev::EventType::KEY, BTN_TOUCH, 0,
+                                    evdev::EventType::KEY,
+                                    BTN_TOUCH,
+                                    0,
                                 ));
                                 output_events.push(InputEvent::new(
                                     evdev::EventType::SYNCHRONIZATION,
@@ -197,7 +206,9 @@ pub async fn run_input_reader(
                             continue;
                         }
 
-                        if ev.kind() == InputEventKind::Synchronization(evdev::Synchronization::SYN_REPORT) {
+                        if ev.kind()
+                            == InputEventKind::Synchronization(evdev::Synchronization::SYN_REPORT)
+                        {
                             let entry_slot = current_slot;
                             let mut frame_slot = current_slot;
 
@@ -209,7 +220,9 @@ pub async fn run_input_reader(
                                             frame_slot = SLOT_COUNT - 1;
                                         }
                                     }
-                                    InputEventKind::AbsAxis(AbsoluteAxisType::ABS_MT_TRACKING_ID) => {
+                                    InputEventKind::AbsAxis(
+                                        AbsoluteAxisType::ABS_MT_TRACKING_ID,
+                                    ) => {
                                         if fev.value() == -1 {
                                             if slots[frame_slot].active {
                                                 debug!(
@@ -236,7 +249,7 @@ pub async fn run_input_reader(
                                                         }
                                                     }
                                                 }
-                                                slots[frame_slot] = Default::default();
+                                                slots[frame_slot].active = false;
                                                 if active_fingers > 0 {
                                                     active_fingers -= 1;
                                                 }
@@ -247,34 +260,48 @@ pub async fn run_input_reader(
                                                     "Implicit touch release in slot {} (new tracking id {})",
                                                     frame_slot, fev.value()
                                                 );
-                                                slots[frame_slot] = Default::default();
                                                 if active_fingers > 0 {
                                                     active_fingers -= 1;
                                                 }
                                             }
+                                            slots[frame_slot] = Default::default();
                                             slots[frame_slot].active = true;
                                             slots[frame_slot].claimed = false;
                                             slots[frame_slot].tracking_id = fev.value();
                                             slots[frame_slot].start_time = Some(Instant::now());
                                             slots[frame_slot].needs_zone_check = true;
-                                            debug!("Touch started in slot {} with tracking id {}", frame_slot, fev.value());
+                                            debug!(
+                                                "Touch started in slot {} with tracking id {}",
+                                                frame_slot,
+                                                fev.value()
+                                            );
                                             active_fingers += 1;
                                         }
                                     }
-                                    InputEventKind::AbsAxis(AbsoluteAxisType::ABS_MT_POSITION_X) => {
+                                    InputEventKind::AbsAxis(
+                                        AbsoluteAxisType::ABS_MT_POSITION_X,
+                                    ) => {
                                         let val = fev.value() as f32;
                                         slots[frame_slot].current_x = val;
                                         if slots[frame_slot].start_x.is_none() {
                                             slots[frame_slot].start_x = Some(val);
-                                            debug!("Slot {} start_x initialized to {}", frame_slot, val);
+                                            debug!(
+                                                "Slot {} start_x initialized to {}",
+                                                frame_slot, val
+                                            );
                                         }
                                     }
-                                    InputEventKind::AbsAxis(AbsoluteAxisType::ABS_MT_POSITION_Y) => {
+                                    InputEventKind::AbsAxis(
+                                        AbsoluteAxisType::ABS_MT_POSITION_Y,
+                                    ) => {
                                         let val = fev.value() as f32;
                                         slots[frame_slot].current_y = val;
                                         if slots[frame_slot].start_y.is_none() {
                                             slots[frame_slot].start_y = Some(val);
-                                            debug!("Slot {} start_y initialized to {}", frame_slot, val);
+                                            debug!(
+                                                "Slot {} start_y initialized to {}",
+                                                frame_slot, val
+                                            );
                                         }
                                     }
                                     _ => {}
@@ -283,15 +310,22 @@ pub async fn run_input_reader(
 
                             for i in 0..SLOT_COUNT {
                                 if slots[i].active && slots[i].needs_zone_check {
-                                    if let (Some(sx), Some(sy)) = (slots[i].start_x, slots[i].start_y) {
+                                    if let (Some(sx), Some(sy)) =
+                                        (slots[i].start_x, slots[i].start_y)
+                                    {
                                         let norm_x = (sx - x_min) / x_range;
                                         let norm_y = (sy - y_min) / y_range;
 
                                         let current_config = config_rx.borrow().clone();
-                                        if let Some(zone) = determine_zone(norm_x, norm_y, &current_config) {
+                                        if let Some(zone) =
+                                            determine_zone(norm_x, norm_y, &current_config)
+                                        {
                                             slots[i].claimed = true;
                                             slots[i].assigned_zone = Some(zone);
-                                            debug!("Touch in slot {} claimed in zone {:?}", i, zone);
+                                            debug!(
+                                                "Touch in slot {} claimed in zone {:?}",
+                                                i, zone
+                                            );
                                         }
                                         slots[i].needs_zone_check = false;
                                     }
@@ -343,12 +377,16 @@ pub async fn run_input_reader(
                             if unclaimed_count != prev_unclaimed_count {
                                 if let Some(old_code) = btn_tool_for_count(prev_unclaimed_count) {
                                     output_events.push(InputEvent::new(
-                                        evdev::EventType::KEY, old_code, 0,
+                                        evdev::EventType::KEY,
+                                        old_code,
+                                        0,
                                     ));
                                 }
                                 if let Some(new_code) = btn_tool_for_count(unclaimed_count) {
                                     output_events.push(InputEvent::new(
-                                        evdev::EventType::KEY, new_code, 1,
+                                        evdev::EventType::KEY,
+                                        new_code,
+                                        1,
                                     ));
                                 }
                                 prev_unclaimed_count = unclaimed_count;

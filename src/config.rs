@@ -102,26 +102,80 @@ impl Default for OsdConfig {
 impl Default for Config {
     fn default() -> Self {
         let mut gestures = HashMap::new();
-        
+
         let mut left_gestures = HashMap::new();
-        left_gestures.insert(Direction::Up, GestureAction { action: "command".into(), cmd: "wpctl set-volume @DEFAULT_SINK@ 5%+".into() });
-        left_gestures.insert(Direction::Down, GestureAction { action: "command".into(), cmd: "wpctl set-volume @DEFAULT_SINK@ 5%-".into() });
+        left_gestures.insert(
+            Direction::Up,
+            GestureAction {
+                action: "command".into(),
+                cmd: "wpctl set-volume @DEFAULT_SINK@ 5%+".into(),
+            },
+        );
+        left_gestures.insert(
+            Direction::Down,
+            GestureAction {
+                action: "command".into(),
+                cmd: "wpctl set-volume @DEFAULT_SINK@ 5%-".into(),
+            },
+        );
         gestures.insert(Zone::Left, left_gestures);
 
         let mut right_gestures = HashMap::new();
-        right_gestures.insert(Direction::Up, GestureAction { action: "command".into(), cmd: "brightnessctl set 10%+".into() });
-        right_gestures.insert(Direction::Down, GestureAction { action: "command".into(), cmd: "brightnessctl set 10%-".into() });
+        right_gestures.insert(
+            Direction::Up,
+            GestureAction {
+                action: "command".into(),
+                cmd: "brightnessctl set 10%+".into(),
+            },
+        );
+        right_gestures.insert(
+            Direction::Down,
+            GestureAction {
+                action: "command".into(),
+                cmd: "brightnessctl set 10%-".into(),
+            },
+        );
         gestures.insert(Zone::Right, right_gestures);
 
         let mut top_gestures = HashMap::new();
-        top_gestures.insert(Direction::Left, GestureAction { action: "command".into(), cmd: "hyprctl dispatch workspace e-1".into() });
-        top_gestures.insert(Direction::Right, GestureAction { action: "command".into(), cmd: "hyprctl dispatch workspace e+1".into() });
+        top_gestures.insert(
+            Direction::Left,
+            GestureAction {
+                action: "command".into(),
+                cmd: "hyprctl dispatch workspace e-1".into(),
+            },
+        );
+        top_gestures.insert(
+            Direction::Right,
+            GestureAction {
+                action: "command".into(),
+                cmd: "hyprctl dispatch workspace e+1".into(),
+            },
+        );
         gestures.insert(Zone::Top, top_gestures);
 
         let mut bottom_gestures = HashMap::new();
-        bottom_gestures.insert(Direction::Left, GestureAction { action: "command".into(), cmd: "playerctl previous".into() });
-        bottom_gestures.insert(Direction::Right, GestureAction { action: "command".into(), cmd: "playerctl next".into() });
-        bottom_gestures.insert(Direction::Tap, GestureAction { action: "command".into(), cmd: "playerctl play-pause".into() });
+        bottom_gestures.insert(
+            Direction::Left,
+            GestureAction {
+                action: "command".into(),
+                cmd: "playerctl previous".into(),
+            },
+        );
+        bottom_gestures.insert(
+            Direction::Right,
+            GestureAction {
+                action: "command".into(),
+                cmd: "playerctl next".into(),
+            },
+        );
+        bottom_gestures.insert(
+            Direction::Tap,
+            GestureAction {
+                action: "command".into(),
+                cmd: "playerctl play-pause".into(),
+            },
+        );
         gestures.insert(Zone::Bottom, bottom_gestures);
 
         Config {
@@ -153,6 +207,6 @@ pub fn load_config() -> Result<Config> {
     let content = std::fs::read_to_string(&path)
         .with_context(|| format!("Failed to read config file at {:?}", path))?;
     let config: Config = toml::from_str(&content).context("Failed to parse config.toml")?;
-    
+
     Ok(config)
 }

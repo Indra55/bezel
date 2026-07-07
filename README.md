@@ -172,6 +172,15 @@ To use the visualizer:
 
 ## Troubleshooting
 
+## Compatibility with libinput-gestures
+
+If you are running both Bezel and `libinput-gestures`, you may find that `libinput-gestures` stops working when Bezel is active. This happens because Bezel grabs the physical trackpad exclusively, and `libinput-gestures`' auto-detection heuristic prefers devices with "touchpad" in the name over "trackpad". It will bind to the silenced hardware device instead of the virtual one created by Bezel.
+
+To fix this, you must explicitly tell `libinput-gestures` to use Bezel's virtual device by adding the following line to your `/etc/libinput-gestures.conf` (or `~/.config/libinput-gestures.conf` if you're using a per-user config):
+```conf
+device Bezel Virtual Trackpad
+```
+Then restart `libinput-gestures` (`libinput-gestures-setup restart`).
 ### OSD Notifications Not Showing
 
 If OSD notifications (`notify-send`) fail or don't show up when Bezel is run as a `systemd` service, your compositor might not be exporting the D-Bus environment properly. You can check the logs to see if `notify-send` is exiting with an error. 
