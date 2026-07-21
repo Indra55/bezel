@@ -31,11 +31,11 @@ cmd = "brightnessctl set 10%-"
 # ---- Top Zone Gestures ----
 [gestures.top.left]
 action = "command"
-cmd = "hyprctl dispatch workspace e-1"
+cmd = "hyprctl dispatch \"hl.dsp.focus({workspace='e-1'})\""
 
 [gestures.top.right]
 action = "command"
-cmd = "hyprctl dispatch workspace e+1"
+cmd = "hyprctl dispatch \"hl.dsp.focus({workspace='e+1'})\""
 
 # ---- Bottom Zone Gestures ----
 [gestures.bottom.left]
