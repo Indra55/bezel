@@ -32,6 +32,11 @@
             nativeBuildInputs = [ pkgs.pkg-config ];
             buildInputs = [ pkgs.udev ];
 
+            postPatch = ''
+              substituteInPlace src/dispatcher.rs \
+                --replace '"sh"' '"${pkgs.runtimeShell}"'
+            '';
+
             meta = {
               description = "Per-edge-zone trackpad gesture daemon";
               longDescription = ''
