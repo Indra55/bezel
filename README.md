@@ -197,7 +197,41 @@ exec-once = systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESK
 exec systemctl --user import-environment WAYLAND_DISPLAY SWAYSOCK DBUS_SESSION_BUS_ADDRESS
 ```
 *(Niri does this automatically).*
+### Bezel is Intercepting the Wrong Device (e.g., Touchscreens)
 
+Because Bezel intercepts raw inputs via evdev, its auto-detection heuristic might accidentally grab a touchscreen, stylus, or other multi-touch interface instead of your actual trackpad. If Bezel is running but gestures aren't registering, this is likely the cause.
+
+To fix this, you can bypass auto-detection and explicitly define your trackpad's exact name in your `~/.config/bezel/config.toml`.
+
+**Step 1: Find your active trackpad event node**
+Run the following debugging command and physically swipe on your trackpad. Look at the output to see which `eventX` node is actively reacting to your touches. *(Note: On Arch Linux, you may need to install the `libinput-tools` package first).*
+
+```sh
+sudo libinput debug-events
+```
+
+**Step 2: Find the exact device name**
+Once you know the active event node (e.g., `event7`), stop the debugging tool (`Ctrl+C`) and run this command to list all input devices:
+
+```sh
+sudo libinput list-devices
+```
+
+Scroll through the output to find the block where the **Kernel** line matches your active event node (e.g., `/dev/input/event7`). Copy the exact string from the **Device** line (e.g., `PIXA3854:00 093A:0239 Touchpad`).
+
+**Step 3: Update your configuration**
+Add a `[device]` block to the top of your `~/.config/bezel/config.toml` using that exact name:
+
+```toml
+[device]
+path = "PIXA3854:00 093A:0239 Touchpad"
+```
+*(Note: Because Bezel looks up the name dynamically, this method is safe from the dynamic `/dev/input/event*` shuffling that occurs on reboot. The /dev/input/event# path still works, though it is highly discouraged for this reason.).*
+
+Then restart the service for the changes to take effect:
+```sh
+systemctl --user restart bezel.service
+```
 ### Debugging Logs
 
 To enable more detailed logging, you can set the `BEZEL_LOG` environment variable. Valid log levels are `error`, `warn`, `info`, `debug`, and `trace`. For example:
