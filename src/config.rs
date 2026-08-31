@@ -142,14 +142,14 @@ impl Default for Config {
             Direction::Left,
             GestureAction {
                 action: "command".into(),
-                cmd: "hyprctl dispatch workspace e-1".into(),
+                cmd: "hyprctl dispatch \"hl.dsp.focus({workspace='e-1'})\"".into(),
             },
         );
         top_gestures.insert(
             Direction::Right,
             GestureAction {
                 action: "command".into(),
-                cmd: "hyprctl dispatch workspace e+1".into(),
+                cmd: "hyprctl dispatch \"hl.dsp.focus({workspace='e+1'})\"".into(),
             },
         );
         gestures.insert(Zone::Top, top_gestures);
