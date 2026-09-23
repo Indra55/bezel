@@ -19,6 +19,10 @@ cmd = "wpctl set-volume @DEFAULT_SINK@ 5%+"
 action = "command"
 cmd = "wpctl set-volume @DEFAULT_SINK@ 5%-"
 
+[gestures.left.tap]
+action = "command"
+cmd = "wpctl set-mute @DEFAULT_SINK@ toggle"
+
 # ---- Right Zone Gestures ----
 [gestures.right.up]
 action = "command"

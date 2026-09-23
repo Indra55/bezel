@@ -147,10 +147,17 @@ fi
 # 6. Setup Systemd Service
 echo "[6/6] Configuring background service..."
 mkdir -p ~/.config/systemd/user/
+SERVICE_TARGET=default.target
+SERVICE_PART_OF=
+if [[ "${XDG_CURRENT_DESKTOP:-${XDG_SESSION_DESKTOP:-}}" == *niri* ]] || [ -n "${NIRI_SOCKET:-}" ]; then
+    SERVICE_TARGET=graphical-session.target
+    SERVICE_PART_OF=PartOf=graphical-session.target
+fi
 cat << EOF > ~/.config/systemd/user/bezel.service
 [Unit]
 Description=Bezel Trackpad Gestures
 After=graphical-session.target
+$SERVICE_PART_OF
 
 [Service]
 ExecStart=$BIN_DEST
@@ -158,11 +165,11 @@ Restart=always
 RestartSec=3
 
 [Install]
-WantedBy=default.target
+WantedBy=$SERVICE_TARGET
 EOF
 
 systemctl --user daemon-reload
-systemctl --user enable bezel.service
+systemctl --user reenable bezel.service
 
 if [ "$NEEDS_RELOGIN" -eq 0 ]; then
     # Restart an existing service so it uses the freshly installed binary.

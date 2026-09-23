@@ -118,6 +118,13 @@ impl Default for Config {
                 cmd: "wpctl set-volume @DEFAULT_SINK@ 5%-".into(),
             },
         );
+        left_gestures.insert(
+            Direction::Tap,
+            GestureAction {
+                action: "command".into(),
+                cmd: "wpctl set-mute @DEFAULT_SINK@ toggle".into(),
+            },
+        );
         gestures.insert(Zone::Left, left_gestures);
 
         let mut right_gestures = HashMap::new();

@@ -366,20 +366,20 @@ generated="$(mktemp "$config_dir/.config.toml.XXXXXX")"
 
 if [ -e "$config_file" ] || [ -L "$config_file" ]; then
     printf '\nYour current config is safe at %s.\n' "$config_file" >&2
-    printf 'Replacing it also replaces custom device, zone, and OSD settings; a backup is made first.\n' >&2
-    if [ "$input_source" = none ]; then answer=1
+    printf 'A preview does not change your active gestures. Applying replaces the whole config, including custom device, zone, and OSD settings, after making a backup.\n' >&2
+    if [ "$input_source" = none ]; then answer=2
     else
         while :; do
-            ask '1) Save preview  2) Back up and replace current config  3) Cancel  [Enter = 1]: '
+            ask '1) Apply now (back up current config)  2) Save preview only  3) Cancel  [Enter = 2]: '
             case "$answer" in ''|1|2|3) break ;; *) echo 'Choose 1, 2, or 3.' >&2 ;; esac
         done
     fi
     case "$answer" in
-        ''|1)
+        ''|2)
             preview="$(mktemp "$config_dir/config.preview.XXXXXX.toml")"
             mv "$generated" "$preview"
-            echo "Preview saved to $preview (current config untouched)" ;;
-        2)
+            echo "Preview saved to $preview. Your active config is unchanged; run onboarding again and choose 1 to apply it." ;;
+        1)
             backup="$(mktemp "$config_file.backup.XXXXXX")"
             cp -p "$config_file" "$backup"
             mv "$generated" "$config_file"
