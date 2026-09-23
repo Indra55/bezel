@@ -76,12 +76,14 @@ If you prefer to enable Bezel per-user instead, you can do so using Home Manager
 ```nix
 { inputs, ... }: {
   imports = [
-    inputs.bezel.homeManagerModules.default
+    inputs.bezel.homeModules.default
   ];
 
   services.bezel.enable = true;
 }
 ```
+
+`homeManagerModules.default` remains available for existing configurations.
 
 **NOTE:** If you use the Home Manager module, you'll have to enable uinput separately in your NixOS config, as Home Manager doesn't have access to them:
 ```nix
