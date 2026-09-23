@@ -36,9 +36,10 @@ in
 
       # ---- Top Zone Gestures ----
       top = {
-        # NOTE: replace these if you're not a Hyprland user!
-        left = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch workspace e-1";
-        right = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch workspace e+1";
+        # Hyprland 0.55+ commands; change these for other compositors or older Hyprland.
+        left = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'";
+        right = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'";
+        tap = mkCmd "${pkgs.hyprland}/bin/hyprctl dispatch 'hl.dsp.workspace.toggle_special(\"magic\")'";
       };
 
       # ---- Bottom Zone Gestures ----

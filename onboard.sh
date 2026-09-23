@@ -122,13 +122,14 @@ if [ "$desktop_explicit" -eq 0 ]; then
     done
 fi
 
-workspace_prev=""; workspace_next=""; move_prev=""; move_next=""
+workspace_prev=""; workspace_next=""; move_prev=""; move_next=""; toggle_magic=""
 case "$desktop" in
     hyprland)
-        workspace_prev='hyprctl dispatch workspace e-1'
-        workspace_next='hyprctl dispatch workspace e+1'
-        move_prev='hyprctl dispatch movetoworkspace e-1'
-        move_next='hyprctl dispatch movetoworkspace e+1' ;;
+        workspace_prev="hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'"
+        workspace_next="hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'"
+        move_prev="hyprctl dispatch 'hl.dsp.window.move({ workspace = \"e-1\", follow = true })'"
+        move_next="hyprctl dispatch 'hl.dsp.window.move({ workspace = \"e+1\", follow = true })'"
+        toggle_magic="hyprctl dispatch 'hl.dsp.workspace.toggle_special(\"magic\")'" ;;
     niri)
         workspace_prev='niri msg action focus-workspace-up'
         workspace_next='niri msg action focus-workspace-down'
@@ -151,6 +152,7 @@ if [ -n "$workspace_prev" ]; then
     bindings[top.left]=12
     bindings[top.right]=13
 fi
+if [ -n "$toggle_magic" ]; then bindings[top.tap]=16; fi
 
 action_name() {
     case "$1" in
@@ -162,6 +164,7 @@ action_name() {
         11) echo 'Mute microphone' ;; 12) echo 'Previous workspace' ;;
         13) echo 'Next workspace' ;; 14) echo 'Move window to previous workspace' ;;
         15) echo 'Move window to next workspace' ;;
+        16) echo 'Toggle magic workspace' ;;
     esac
 }
 
@@ -180,6 +183,7 @@ action_command() {
         11) echo 'wpctl set-mute @DEFAULT_SOURCE@ toggle' ;;
         12) echo "$workspace_prev" ;; 13) echo "$workspace_next" ;;
         14) echo "$move_prev" ;; 15) echo "$move_next" ;;
+        16) echo "$toggle_magic" ;;
     esac
 }
 
@@ -251,6 +255,9 @@ show_actions() {
             printf ' %2d) %s\n' "$id" "$(action_name "$id")" >&2
         done
     fi
+    if [ -n "$toggle_magic" ]; then
+        printf ' %2d) %s\n' 16 "$(action_name 16)" >&2
+    fi
 }
 
 step=0
@@ -275,8 +282,10 @@ for edge in left right top bottom; do
                     while :; do
                         ask "$edge / $direction [$(action_name "$current"); Enter keeps]: "
                         if [ -z "$answer" ]; then break; fi
-                        if [[ "$answer" =~ ^([0-9]|1[0-5])$ ]] && {
-                            [ "$answer" -le 11 ] || [ -n "$workspace_prev" ];
+                        if [[ "$answer" =~ ^([0-9]|1[0-6])$ ]] && {
+                            [ "$answer" -le 11 ] ||
+                            { [ "$answer" -le 15 ] && [ -n "$workspace_prev" ]; } ||
+                            { [ "$answer" -eq 16 ] && [ -n "$toggle_magic" ]; };
                         }; then
                             if [ "$answer" -eq 0 ]; then unset 'bindings[$key]';
                             else bindings[$key]="$answer"; fi
@@ -317,6 +326,8 @@ emit_bindings() {
             id="${bindings[$key]:-0}"
             [ "$id" -ne 0 ] || continue
             cmd="$(action_command "$id")"
+            cmd="${cmd//\\/\\\\}"
+            cmd="${cmd//\"/\\\"}"
             if [ "$format" = nix ]; then
                 printf '    %s.%s = { action = "command"; cmd = "%s"; };\n' "$edge" "$direction" "$cmd"
             else

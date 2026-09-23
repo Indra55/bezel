@@ -29,13 +29,18 @@ action = "command"
 cmd = "brightnessctl set 10%-"
 
 # ---- Top Zone Gestures ----
+# Hyprland 0.55+ commands; change these for other compositors or older Hyprland.
 [gestures.top.left]
 action = "command"
-cmd = "hyprctl dispatch workspace e-1"
+cmd = "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'"
 
 [gestures.top.right]
 action = "command"
-cmd = "hyprctl dispatch workspace e+1"
+cmd = "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e+1\" })'"
+
+[gestures.top.tap]
+action = "command"
+cmd = "hyprctl dispatch 'hl.dsp.workspace.toggle_special(\"magic\")'"
 
 # ---- Bottom Zone Gestures ----
 [gestures.bottom.left]

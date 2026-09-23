@@ -114,7 +114,7 @@ Then reload udev rules with `sudo udevadm control --reload-rules && sudo udevadm
 ### Configuration
 Bezel looks for its configuration at `~/.config/bezel/config.toml`.
 
-On first install, `install.sh` launches a terminal onboarding wizard. It detects your Wayland desktop, offers numbered choices for Hyprland, Niri, Sway, Plasma, GNOME, or other Wayland desktops, and shows each trackpad edge as you configure it. Each edge supports up, down, left, right, and tap, with 15 available actions (11 on desktops without supported workspace commands). Press Enter to keep suggested bindings, or customize any of the 20 edge/gesture slots. Hyprland, Niri, and Sway get their own workspace commands; Plasma, GNOME, and unknown desktops omit workspace actions. The installer keeps an existing config. Running `bash onboard.sh` directly still opens the wizard and saves a preview when a config already exists; it only replaces the config if you choose the backup-and-replace option.
+On first install, `install.sh` launches a terminal onboarding wizard. It detects your Wayland desktop, offers numbered choices for Hyprland, Niri, Sway, Plasma, GNOME, or other Wayland desktops, and shows each trackpad edge as you configure it. Each edge supports up, down, left, right, and tap, with 16 available actions on Hyprland, 15 on Niri and Sway, and 11 on other desktops. Press Enter to keep suggested bindings, or customize any of the 20 edge/gesture slots. Hyprland, Niri, and Sway get their own workspace commands; Plasma, GNOME, and unknown desktops omit workspace actions. The installer keeps an existing config. Running `bash onboard.sh` directly still opens the wizard and saves a preview when a config already exists; it only replaces the config if you choose the backup-and-replace option.
 
 The active trackpad edge uses a static warm-orange halo in color terminals. If your shell sets `NO_COLOR`, run `bash onboard.sh --color` to preview the accent anyway; `--no-color` forces the monochrome version.
 
@@ -123,10 +123,12 @@ On NixOS, the installer prints a Home Manager snippet instead of creating an unm
 For Arch, Debian/Ubuntu, Fedora, and openSUSE, the same installer uses systemd user services and udev; you need Rust only when building from source or when a prebuilt binary is unavailable. The command tools above must be installed separately.
 
 To define a gesture, specify the zone and direction, and the command to run:
+This example uses Hyprland 0.55+ syntax; older Hyprland releases use different dispatch commands.
+
 ```toml
 [gestures.top.left]
 action = "command"
-cmd = "hyprctl dispatch workspace e-1"
+cmd = "hyprctl dispatch 'hl.dsp.focus({ workspace = \"e-1\" })'"
 ```
 *(See `config.toml.example` in this repo for a basic template.)*
 
@@ -147,7 +149,14 @@ canonical_hints = false # Set to true only if using mako or notify-osd
 
 Start Bezel when your Wayland compositor starts. **Void Linux / non-systemd** users should use this method instead of a background service. If `bezel` is not in your system `$PATH`, use the absolute path `~/.local/bin/bezel` (or `~/.cargo/bin/bezel` if built with cargo).
 
-For **Hyprland** (`~/.config/hypr/hyprland.conf`):
+For **Hyprland 0.55+** (`~/.config/hypr/hyprland.lua`):
+```lua
+hl.on("hyprland.start", function()
+    hl.exec_cmd("~/.local/bin/bezel")
+end)
+```
+
+For **older Hyprland** (`~/.config/hypr/hyprland.conf`):
 ```conf
 exec-once = ~/.local/bin/bezel
 ```
@@ -197,7 +206,14 @@ If OSD notifications (`notify-send`) fail or don't show up when Bezel is run as 
 
 To fix this, add the following to your compositor's startup config to import the session variables:
 
-**Hyprland:**
+**Hyprland 0.55+** (`hyprland.lua`):
+```lua
+hl.on("hyprland.start", function()
+    hl.exec_cmd("systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS")
+end)
+```
+
+**Older Hyprland** (`hyprland.conf`):
 ```conf
 exec-once = systemctl --user import-environment WAYLAND_DISPLAY XDG_CURRENT_DESKTOP DBUS_SESSION_BUS_ADDRESS
 ```
