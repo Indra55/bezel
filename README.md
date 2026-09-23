@@ -112,13 +112,21 @@ Then reload udev rules with `sudo udevadm control --reload-rules && sudo udevadm
 ### Configuration
 Bezel looks for its configuration at `~/.config/bezel/config.toml`.
 
+On first install, `install.sh` launches a terminal onboarding wizard. It detects your Wayland desktop, offers numbered choices for Hyprland, Niri, Sway, Plasma, GNOME, or other Wayland desktops, and shows each trackpad edge as you configure it. Each edge supports up, down, left, right, and tap, with 15 available actions (11 on desktops without supported workspace commands). Press Enter to keep suggested bindings, or customize any of the 20 edge/gesture slots. Hyprland, Niri, and Sway get their own workspace commands; Plasma, GNOME, and unknown desktops omit workspace actions. The installer keeps an existing config. Running `bash onboard.sh` directly still opens the wizard and saves a preview when a config already exists; it only replaces the config if you choose the backup-and-replace option.
+
+The active trackpad edge uses a static warm-orange halo in color terminals. If your shell sets `NO_COLOR`, run `bash onboard.sh --color` to preview the accent anyway; `--no-color` forces the monochrome version.
+
+On NixOS, the installer prints a Home Manager snippet instead of creating an unmanaged TOML file or systemd service. Import the Bezel Home Manager module, add the snippet, and configure `hardware.uinput` plus the `input` and `uinput` groups in your NixOS configuration. The snippet includes the gesture command tools (`wpctl`, `brightnessctl`, `playerctl`).
+
+For Arch, Debian/Ubuntu, Fedora, and openSUSE, the same installer uses systemd user services and udev; you need Rust only when building from source or when a prebuilt binary is unavailable. The command tools above must be installed separately.
+
 To define a gesture, specify the zone and direction, and the command to run:
 ```toml
 [gestures.top.left]
 action = "command"
 cmd = "hyprctl dispatch workspace e-1"
 ```
-*(See `config.toml.example` in this repo for a complete template).*
+*(See `config.toml.example` in this repo for a basic template.)*
 
 To configure OSD labels, add the following:
 ```toml

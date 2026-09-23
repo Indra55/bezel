@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-set -e
+set -eo pipefail
 
 echo "--- Bezel Smart Installer ---"
 
 INSTALL_MODE="unknown"
 NEEDS_RELOGIN=0
+SERVICE_STARTED=0
 BIN_DEST="$HOME/.local/bin/bezel"
 REPO_URL="https://github.com/indra55/bezel"
+SCRIPT_DIR=""
+if [ -n "${BASH_SOURCE[0]}" ] && [ -f "${BASH_SOURCE[0]}" ]; then
+    SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+fi
 
 ARCH=$(uname -m)
 case "$ARCH" in
@@ -19,18 +24,35 @@ case "$ARCH" in
 esac
 
 LATEST_RELEASE_URL="$REPO_URL/releases/latest/download/bezel-$RUST_TARGET"
-CONFIG_EXAMPLE_URL="https://raw.githubusercontent.com/indra55/bezel/main/config.toml.example"
+ONBOARD_URL="https://raw.githubusercontent.com/indra55/bezel/main/onboard.sh"
+
+run_onboarding() {
+    if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/onboard.sh" ]; then
+        bash "$SCRIPT_DIR/onboard.sh" "$@"
+    else
+        curl -sSfL "$ONBOARD_URL" | bash -s -- "$@"
+    fi
+}
+
+# NixOS installations are declarative; print a Home Manager snippet and stop.
+if [ -f /etc/os-release ]; then
+    # shellcheck disable=SC1091
+    . /etc/os-release
+    if [ "${ID:-}" = nixos ]; then
+        run_onboarding --nixos
+        exit 0
+    fi
+fi
 
 LOCAL_VERSION="none"
 if command -v bezel &> /dev/null; then
-    LOCAL_VERSION=$(timeout 1 bezel --version 2> /dev/null | awk '{print $2}')
+    LOCAL_VERSION=$(timeout 1 bezel --version 2> /dev/null | awk '{print $2}') || LOCAL_VERSION="unknown"
     if [ -z "$LOCAL_VERSION" ]; then
         LOCAL_VERSION="unknown"
     fi
-    BIN_DEST="$(command -v bezel)"
 fi
 
-if [ -f "Cargo.toml" ] && grep -q 'name = "bezel"' Cargo.toml 2> /dev/null; then
+if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/Cargo.toml" ] && grep -q 'name = "bezel"' "$SCRIPT_DIR/Cargo.toml" 2> /dev/null; then
     INSTALL_MODE="source"
 else
     INSTALL_MODE="download"
@@ -42,7 +64,7 @@ if [ "$INSTALL_MODE" = "source" ]; then
         echo "Error: Rust/Cargo not found. Install from https://rustup.rs"
         exit 1
     fi
-    cargo build --release
+    cargo build --release --manifest-path "$SCRIPT_DIR/Cargo.toml"
     echo "[2/6] Installing binary to ~/.local/bin/bezel..."
     mkdir -p ~/.local/bin
     if [ -f "$BIN_DEST" ]; then
@@ -50,7 +72,7 @@ if [ "$INSTALL_MODE" = "source" ]; then
         cp "$BIN_DEST" "$BIN_DEST.bak"
         rm -f "$BIN_DEST"
     fi
-    cp target/release/bezel ~/.local/bin/
+    cp "$SCRIPT_DIR/target/release/bezel" ~/.local/bin/
     BIN_DEST="$HOME/.local/bin/bezel"
 else
     echo "[1/6] Fetching latest release info..."
@@ -95,24 +117,16 @@ if [[ ":$PATH:" != *":$(dirname "$BIN_DEST"):"* ]]; then
     echo "      NOTE: $(dirname "$BIN_DEST") is not in your PATH. Add it to your shell profile."
 fi
 
-# 3. Setup Default Config Template
-echo "[3/6] Setting up default configuration template..."
-mkdir -p ~/.config/bezel
-if [ ! -f ~/.config/bezel/config.toml ]; then
-    if [ -f "config.toml.example" ]; then
-        cp config.toml.example ~/.config/bezel/config.toml
-    else
-        curl -sSfL "$CONFIG_EXAMPLE_URL" -o ~/.config/bezel/config.toml || echo "      Warning: Could not download config template."
-    fi
-    echo "      Created default config at ~/.config/bezel/config.toml"
-else
-    echo "      Config already exists at ~/.config/bezel/config.toml (skipping)"
-fi
+# 3. Generate a desktop-specific config on first install.
+echo "[3/6] Configuring gestures..."
+run_onboarding --if-missing
 
 # 4. Setup Udev rules
 echo "[4/6] Setting up udev rules for /dev/uinput..."
 echo "      (You may be prompted for your sudo password)"
-sudo rm -f /etc/udev/rules.d/99-uinput.rules # remove old rules
+if [ -e /etc/udev/rules.d/99-uinput.rules ]; then
+    echo "      Existing 99-uinput.rules left untouched; review it if uinput permissions fail."
+fi
 sudo tee /etc/udev/rules.d/99-bezel.rules > /dev/null << EOF
 SUBSYSTEM=="input", KERNEL=="event*", ENV{ID_INPUT_TOUCHPAD}=="1", TAG+="uaccess", GROUP="input", MODE="0660"
 KERNEL=="uinput", MODE="0660", GROUP="input", OPTIONS+="static_node=uinput"
@@ -121,9 +135,9 @@ sudo udevadm control --reload-rules && sudo udevadm trigger --action=add --subsy
 
 # 5. Check Input Group
 echo "[5/6] Checking input group permissions..."
-if ! groups $USER | grep -q "\binput\b"; then
+if ! groups "$USER" | grep -q "\binput\b"; then
     echo "      Adding $USER to the 'input' group..."
-    sudo usermod -aG input $USER
+    sudo usermod -aG input "$USER"
     NEEDS_RELOGIN=1
 else
     echo "      User $USER is already in the 'input' group."
@@ -151,8 +165,12 @@ systemctl --user daemon-reload
 systemctl --user enable bezel.service
 
 if [ "$NEEDS_RELOGIN" -eq 0 ]; then
-    # Don't fail the install if the service start fails (e.g. binary not yet functional)
-    systemctl --user start bezel.service || true
+    # Restart an existing service so it uses the freshly installed binary.
+    if systemctl --user restart bezel.service; then
+        SERVICE_STARTED=1
+    else
+        echo "      Warning: Bezel service did not start; check systemctl --user status bezel.service"
+    fi
 fi
 
 echo ""
@@ -161,9 +179,12 @@ if [ "$NEEDS_RELOGIN" -eq 1 ]; then
     echo "WARNING: You were just added to the 'input' group."
     echo "You MUST reboot your computer for permissions to apply."
     echo "Once rebooted, the service will start working automatically."
-else
+elif [ "$SERVICE_STARTED" -eq 1 ]; then
     echo "Bezel is now running in the background."
     echo "You can check its status with:"
     echo "  systemctl --user status bezel.service"
+else
+    echo "Bezel was installed, but the service is not running."
+    echo "Check: systemctl --user status bezel.service"
 fi
 echo ""
