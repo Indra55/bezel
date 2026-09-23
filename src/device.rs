@@ -51,6 +51,29 @@ pub fn find_trackpad() -> Result<Device> {
     bail!("No trackpad device found automatically. Check your /dev/input/ permissions.");
 }
 
+pub fn find_device_by_name(target_name: &str) -> Result<Device> {
+    for entry in std::fs::read_dir("/dev/input").context("Failed to read /dev/input")? {
+        let entry = entry?;
+        let path = entry.path();
+        if path.is_dir() {
+            continue;
+        }
+
+        if let Ok(device) = Device::open(&path) {
+            if let Some(name) = device.name() {
+                if name == target_name {
+                    info!(
+                        "Found device by name: {} at {:?}",
+                        name, path
+                    );
+                    return Ok(device);
+                }
+            }
+        }
+    }
+    bail!("No device found with name: '{}'. Check your spelling or run `sudo libinput list-devices`.", target_name);
+}
+
 fn determine_zone(norm_x: f32, norm_y: f32, config: &Config) -> Option<Zone> {
     if norm_x < config.zones.left_width {
         Some(Zone::Left)
@@ -123,9 +146,11 @@ pub async fn run_input_reader(
 
     let mut device = if config.device.path == "auto" {
         find_trackpad()?
-    } else {
+    } else if config.device.path.starts_with('/') {
         Device::open(&config.device.path)
             .with_context(|| format!("Failed to open device at {}", config.device.path))?
+    } else {
+        find_device_by_name(&config.device.path)?
     };
 
     if let Err(e) = device.grab() {
