@@ -117,9 +117,26 @@ if [[ ":$PATH:" != *":$(dirname "$BIN_DEST"):"* ]]; then
     echo "      NOTE: $(dirname "$BIN_DEST") is not in your PATH. Add it to your shell profile."
 fi
 
-# 3. Generate a desktop-specific config on first install.
+# 3. Generate a desktop-specific config or offer to reconfigure on upgrades.
 echo "[3/6] Configuring gestures..."
-run_onboarding --if-missing
+CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/bezel/config.toml"
+if [ -e "$CONFIG_FILE" ] || [ -L "$CONFIG_FILE" ]; then
+    if { : </dev/tty; } 2>/dev/null; then
+        while :; do
+            printf 'Existing config found at %s. Run onboarding again? [y/N]: ' "$CONFIG_FILE" >/dev/tty
+            IFS= read -r answer </dev/tty || answer=""
+            case "${answer,,}" in
+                y|yes) run_onboarding; break ;;
+                ''|n|no) echo "Existing config kept at $CONFIG_FILE"; break ;;
+                *) printf 'Enter y or n.\n' >/dev/tty ;;
+            esac
+        done
+    else
+        echo "Existing config kept at $CONFIG_FILE (no terminal available for onboarding)."
+    fi
+else
+    run_onboarding --if-missing
+fi
 
 # 4. Setup Udev rules
 echo "[4/6] Setting up udev rules for /dev/uinput..."
