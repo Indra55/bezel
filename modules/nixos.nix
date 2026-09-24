@@ -44,7 +44,7 @@ in
         Restart = "always";
         RestartSec = 3;
       };
-      path = [ pkgs.bash ] ++ cfg.extraPackages;
+      path = cfg.extraPackages;
       wantedBy = [ "default.target" ];
     };
 
