@@ -53,7 +53,7 @@ The panel uses warm amber accents and previews that match the current step. It n
 To configure a cloned checkout again:
 
 ```sh
-bash onboard.sh
+./onboard.sh
 ```
 
 Use `--plain` for numbered prompts, `--no-animation` to disable gesture animation, `--no-color` for monochrome, or `--color` to enable accents despite `NO_COLOR`. The plain flow offers basic per-edge choices followed by an advanced multi-finger binding editor.

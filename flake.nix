@@ -32,6 +32,10 @@
             nativeBuildInputs = [ pkgs.pkg-config ];
             buildInputs = [ pkgs.udev ];
 
+            postInstall = ''
+              cp onboard.sh $out/bin/bezel-onboard
+            '';
+
             postPatch = ''
               substituteInPlace src/dispatcher.rs \
                 --replace-fail '"sh"' '"${pkgs.runtimeShell}"'
