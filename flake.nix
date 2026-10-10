@@ -34,7 +34,13 @@
 
             postPatch = ''
               substituteInPlace src/dispatcher.rs \
-                --replace-fail '"sh"' '"${pkgs.runtimeShell}"'
+                --replace-fail '"sh"' '"${pkgs.runtimeShell}"' \
+                --replace-fail '"notify-send"' '"${lib.getExe' pkgs.libnotify "notify-send"}"'
+            '';
+
+            postInstall = ''
+              install -Dm644 config.toml.example \
+                $out/share/bezel/config.toml.example
             '';
 
             meta = {
@@ -45,7 +51,7 @@
                 dispatches shell commands based on directional swipes or taps
                 along the edges (zones) of your trackpad.
               '';
-              changelog = "https://github.com/Indra55/bezel/releases/tag/${finalAttrs.version}";
+              changelog = "https://github.com/Indra55/bezel/releases/tag/v${finalAttrs.version}";
               homepage = "https://github.com/Indra55/bezel";
               license = lib.licenses.gpl3Plus;
               mainProgram = "bezel";
