@@ -29,18 +29,33 @@
             cargoLock.lockFile = ./Cargo.lock;
 
             # evdev and uinput crates typically require libudev to build
-            nativeBuildInputs = [ pkgs.pkg-config ];
+            nativeBuildInputs = [
+              pkgs.pkg-config
+              pkgs.makeWrapper
+            ];
             buildInputs = [ pkgs.udev ];
+
+            postInstall = ''
+              install -Dm755 onboard.sh $out/bin/bezel-onboard
+              substituteInPlace $out/bin/bezel-onboard \
+                --replace-fail '#!/usr/bin/env bash' '#!${pkgs.runtimeShell}'
+              wrapProgram $out/bin/bezel-onboard \
+                --prefix PATH : ${
+                  lib.makeBinPath [
+                    pkgs.coreutils
+                    pkgs.gawk
+                    pkgs.python3
+                  ]
+                }
+
+              install -Dm644 config.toml.example \
+                $out/share/bezel/config.toml.example
+            '';
 
             postPatch = ''
               substituteInPlace src/dispatcher.rs \
                 --replace-fail '"sh"' '"${pkgs.runtimeShell}"' \
                 --replace-fail '"notify-send"' '"${lib.getExe' pkgs.libnotify "notify-send"}"'
-            '';
-
-            postInstall = ''
-              install -Dm644 config.toml.example \
-                $out/share/bezel/config.toml.example
             '';
 
             meta = {

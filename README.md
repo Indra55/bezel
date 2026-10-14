@@ -43,8 +43,10 @@ On NixOS, configure the `input` and `uinput` groups declaratively. See the guide
 Bezel reads `~/.config/bezel/config.toml`. To run Gesture Studio again from a cloned checkout:
 
 ```sh
-bash onboard.sh
+./onboard.sh
 ```
+
+The NixOS package also installs the onboard script under the `bezel-onboard` command.
 
 A two-finger swipe on the left edge can control brightness:
 

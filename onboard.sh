@@ -1465,7 +1465,7 @@ NIX
     printf '  };\n'
     emit_advanced nix
     printf '};\n'
-    printf 'Also enable hardware.uinput and add your user to the input and uinput groups in NixOS.\n' >&2
+    printf '# Also enable hardware.uinput and add your user to the input and uinput groups in NixOS.\n' >&2
     exit 0
 fi
 

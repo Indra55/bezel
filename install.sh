@@ -43,7 +43,7 @@ ONBOARD_URL="https://raw.githubusercontent.com/indra55/bezel/main/onboard.sh"
 
 run_onboarding() {
     if [ -n "$SCRIPT_DIR" ] && [ -f "$SCRIPT_DIR/onboard.sh" ]; then
-        bash "$SCRIPT_DIR/onboard.sh" "$@"
+        "$SCRIPT_DIR/onboard.sh" "$@"
     else
         curl -sSfL "$ONBOARD_URL" | bash -s -- "$@"
     fi
@@ -136,14 +136,20 @@ fi
 install_stage 3 "Tune your gestures"
 CONFIG_FILE="${XDG_CONFIG_HOME:-$HOME/.config}/bezel/config.toml"
 if [ -e "$CONFIG_FILE" ] || [ -L "$CONFIG_FILE" ]; then
-    if { : </dev/tty; } 2>/dev/null; then
+    if { : < /dev/tty; } 2> /dev/null; then
         while :; do
-            printf 'Existing config found at %s. Run onboarding again? [y/N]: ' "$CONFIG_FILE" >/dev/tty
-            IFS= read -r answer </dev/tty || answer=""
+            printf 'Existing config found at %s. Run onboarding again? [y/N]: ' "$CONFIG_FILE" > /dev/tty
+            IFS= read -r answer < /dev/tty || answer=""
             case "${answer,,}" in
-                y|yes) run_onboarding; break ;;
-                ''|n|no) echo "Existing config kept at $CONFIG_FILE"; break ;;
-                *) printf 'Enter y or n.\n' >/dev/tty ;;
+                y | yes)
+                    run_onboarding
+                    break
+                    ;;
+                '' | n | no)
+                    echo "Existing config kept at $CONFIG_FILE"
+                    break
+                    ;;
+                *) printf 'Enter y or n.\n' > /dev/tty ;;
             esac
         done
     else
