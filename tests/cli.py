@@ -223,6 +223,61 @@ class CliTests(unittest.TestCase):
         self.assertIn('Service: active (running)', stdout)
         self.assertNotIn('Configuration: valid', stdout)
 
+    def fake_service_control(self, error='', exit_code=0):
+        tools = self.directory / 'tools'
+        tools.mkdir(exist_ok=True)
+        executable = tools / 'systemctl'
+        executable.write_text(
+            '#!/bin/sh\n'
+            'printf "%s\\n" "$*" > "$BEZEL_TEST_CALLS"\n'
+            + "cat >&2 <<'OUTPUT'\n" + error + '\nOUTPUT\n'
+            + f'exit {exit_code}\n'
+        )
+        executable.chmod(0o755)
+        return {**self.env, 'PATH': str(tools) + ':' + os.environ['PATH'],
+                'BEZEL_TEST_CALLS': str(self.directory / 'service-calls')}
+
+    def test_restart_and_stop_delegate_to_user_service_with_invalid_config(self):
+        self.config.write_text('invalid config')
+        for action, result in [('restart', 'restarted'), ('stop', 'stopped')]:
+            with self.subTest(action=action):
+                env = self.fake_service_control()
+                code, stdout, stderr = self.run_cli('--' + action, env=env)
+                self.assertEqual(code, 0, stderr)
+                self.assertEqual((self.directory / 'service-calls').read_text(),
+                                 f'--user {action} bezel.service\n')
+                self.assertIn(f'Service {result}: bezel.service', stdout)
+                self.assertNotIn('Starting Bezel daemon', stdout + stderr)
+        self.assertEqual(self.config.read_text(), 'invalid config')
+
+    def test_service_control_reports_missing_unit_and_bus_failures(self):
+        for action in ['restart', 'stop']:
+            for error in ['Unit bezel.service not found.', 'Failed to connect to bus']:
+                env = self.fake_service_control(error, 5)
+                code, stdout, stderr = self.run_cli('--' + action, env=env)
+                self.assertNotEqual(code, 0)
+                self.assertIn(f'Could not {action} bezel.service', stderr)
+                self.assertIn(error, stderr)
+                self.assertNotIn('Service restarted', stdout)
+                self.assertNotIn('Service stopped', stdout)
+
+    def test_service_control_requires_systemctl(self):
+        for action in ['--restart', '--stop']:
+            code, stdout, stderr = self.run_cli(action, env={**self.env, 'PATH': ''})
+            self.assertNotEqual(code, 0)
+            self.assertIn('systemctl is required', stderr)
+
+    def test_invalid_service_control_combinations_never_call_systemctl(self):
+        env = self.fake_service_control()
+        for args in [('--restart', '--stop'), ('--stop', '--restart'),
+                     ('--status', '--restart'), ('--restart', '--configure'),
+                     ('--stop', '--unknown'), ('--config', 'a', '--restart'),
+                     ('--stop', '--config', 'a')]:
+            with self.subTest(args=args):
+                code, stdout, stderr = self.run_cli(*args, env=env)
+                self.assertNotEqual(code, 0)
+                self.assertFalse((self.directory / 'service-calls').exists())
+
 
 if __name__ == '__main__':
     unittest.main()

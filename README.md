@@ -55,8 +55,12 @@ Use `bezel --help` to see available options. Gesture Studio requires Bash and Py
 | `bezel --list-devices` | List readable, compatible trackpad names and paths |
 | `bezel --config ./gestures.toml` | Start with an alternate config and reload it on changes |
 | `bezel --status` | Inspect the user service, its open input device, and the config on disk |
+| `bezel --restart` | Restart the user service, or start it if stopped |
+| `bezel --stop` | Stop the user service |
 
 Combine `--config PATH` with `--check-config`, `--status`, or place it before `--configure` to use that file. `--status` queries `bezel.service`; it does not discover manually started daemons.
+
+`bezel --restart` and `bezel --stop` use systemd's `bezel.service` and its installed configuration; they do not accept `--config`. Stopping leaves autostart enabled for your next session.
 
 A two-finger swipe on the left edge can control brightness:
 

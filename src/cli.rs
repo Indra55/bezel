@@ -16,6 +16,8 @@ Options:
   --list-devices         List readable, compatible trackpads without grabbing them
   --config PATH          Use this file for startup, reloads, validation, or editing
   --status               Show the user service, open input device, and config inspected
+  --restart              Restart the bezel.service user service (or start it if stopped)
+  --stop                 Stop the bezel.service user service
   -h, --help             Show this help
   -V, --version          Show the version
 
@@ -54,7 +56,7 @@ pub fn handle_args() -> Result<Option<(PathBuf, Config)>> {
                 }
                 return configure(config_path, rest);
             }
-            Some("--check-config" | "--list-devices" | "--status") => {
+            Some("--check-config" | "--list-devices" | "--status" | "--restart" | "--stop") => {
                 ensure!(
                     action.is_none(),
                     "Choose one action. Run bezel --help for usage."
@@ -92,6 +94,10 @@ pub fn handle_args() -> Result<Option<(PathBuf, Config)>> {
             crate::device::list_trackpads()?;
         }
         Some("--status") => crate::status::show(&path)?,
+        Some(action @ ("--restart" | "--stop")) => {
+            ensure!(!explicit, "--config cannot be used with {action}; the service uses its installed configuration");
+            crate::status::control(&action[2..])?;
+        }
         None => {
             let config = if explicit || path.try_exists()? {
                 load_config(&path)?

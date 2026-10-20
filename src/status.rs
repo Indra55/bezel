@@ -5,6 +5,25 @@ use std::process::Command;
 
 use crate::config::load_config;
 
+pub fn control(action: &str) -> Result<()> {
+    let output = Command::new("systemctl")
+        .args(["--user", action, "bezel.service"])
+        .output()
+        .with_context(|| format!("Could not {action} bezel.service; systemctl is required"))?;
+    ensure!(
+        output.status.success(),
+        "Could not {action} bezel.service: {}",
+        String::from_utf8_lossy(&output.stderr).trim()
+    );
+    let result = if action == "restart" {
+        "restarted"
+    } else {
+        "stopped"
+    };
+    println!("Service {result}: bezel.service");
+    Ok(())
+}
+
 pub fn show(config_path: &Path) -> Result<()> {
     let output = Command::new("systemctl")
         .args([

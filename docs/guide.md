@@ -86,6 +86,15 @@ bezel --config ./gestures.toml --configure --plain
 
 `--status` requires systemd and queries the current user's `bezel.service`. It shows service state, PID, and open `/dev/input` paths when `/proc` permissions allow. It also validates the selected config on disk and prints its configured device. This config inspection does not prove which settings the running process loaded. Manually started daemons and differently named services are outside this status check. Inactive or uninstalled services are reported normally; a failed service query or invalid config returns a nonzero exit status.
 
+To control the user service directly:
+
+```sh
+bezel --restart
+bezel --stop
+```
+
+These run `systemctl --user restart bezel.service` and `systemctl --user stop bezel.service`. Restart also starts a stopped service. Stop releases the trackpad and returns control to the desktop; an intentional stop does not trigger the service's automatic restart policy. Autostart stays enabled, so Bezel can start again in your next session. Both commands use the service's installed executable and configuration and reject `--config`. They contact systemd without parsing the config, so a broken config does not prevent stopping the service. Failures such as a missing service or unavailable user bus return a nonzero exit status. They do not control manually started daemons or services with different names.
+
 To define a gesture, specify the zone and direction, and the command to run:
 This example uses Hyprland 0.55+ syntax; older Hyprland releases use different dispatch commands.
 
