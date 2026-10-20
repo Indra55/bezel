@@ -40,13 +40,23 @@ sudo usermod -aG input "$USER"
 
 On NixOS, configure the `input` and `uinput` groups declaratively. See the guide for permissions and udev setup.
 
-Bezel reads `~/.config/bezel/config.toml`. To run Gesture Studio again from a cloned checkout:
+Bezel reads `~/.config/bezel/config.toml`. To open Gesture Studio and edit your bindings:
 
 ```sh
-./onboard.sh
+bezel --configure
 ```
 
-The NixOS package also installs the onboard script under the `bezel-onboard` command.
+Use `bezel --help` to see available options. Gesture Studio requires Bash and Python 3.11+ to edit existing configurations. From a cloned checkout, `./onboard.sh` also works; the NixOS package provides `bezel-onboard` as well. These CLI options require v1.1.0 or later:
+
+| Command | Purpose |
+| --- | --- |
+| `bezel --configure` | Edit gesture bindings in Gesture Studio |
+| `bezel --check-config` | Validate the config without starting the daemon |
+| `bezel --list-devices` | List readable, compatible trackpad names and paths |
+| `bezel --config ./gestures.toml` | Start with an alternate config and reload it on changes |
+| `bezel --status` | Inspect the user service, its open input device, and the config on disk |
+
+Combine `--config PATH` with `--check-config`, `--status`, or place it before `--configure` to use that file. `--status` queries `bezel.service`; it does not discover manually started daemons.
 
 A two-finger swipe on the left edge can control brightness:
 

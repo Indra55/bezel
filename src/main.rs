@@ -4,24 +4,24 @@ use tokio::sync::{mpsc, watch};
 use tracing::{error, info};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
+mod cli;
 mod config;
 mod device;
 mod dispatcher;
 mod gesture;
 mod passthrough;
+mod status;
 
-use config::{get_config_path, load_config};
+use config::load_config;
 use device::run_input_reader;
 use dispatcher::run_dispatcher;
 use gesture::{ActionCommand, Gesture, GestureEvent};
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() > 1 && (args[1] == "--version" || args[1] == "-V") {
-        println!("bezel v{}", env!("CARGO_PKG_VERSION"));
-        std::process::exit(0);
-    }
+    let Some((config_path, initial_config)) = cli::handle_args()? else {
+        return Ok(());
+    };
 
     let filter = EnvFilter::try_from_env("BEZEL_LOG").unwrap_or_else(|_| EnvFilter::new("info"));
 
@@ -31,7 +31,6 @@ async fn main() -> Result<()> {
     info!("Starting Bezel daemon");
     info!("Wayland users: Please configure your compositor to apply your preferred trackpad settings (like tap-to-click) to the 'Bezel Virtual Trackpad' device.");
 
-    let initial_config = load_config()?;
     let (config_tx, config_rx) = watch::channel(initial_config.clone());
 
     let (gesture_tx, mut gesture_rx) = mpsc::channel::<GestureEvent>(64); // Input reader bursts
@@ -50,12 +49,13 @@ async fn main() -> Result<()> {
     });
 
     // Setup hot-reloading for config
+    let reload_path = config_path.clone();
     let mut watcher =
         notify::recommended_watcher(move |res: Result<Event, notify::Error>| match res {
             Ok(event) => {
                 if event.kind.is_modify() {
                     info!("Config file modified, reloading...");
-                    match load_config() {
+                    match load_config(&reload_path) {
                         Ok(new_config) => {
                             let _ = config_tx.send(new_config);
                         }
@@ -66,7 +66,6 @@ async fn main() -> Result<()> {
             Err(e) => error!("watch error: {:?}", e),
         })?;
 
-    let config_path = get_config_path();
     if config_path.exists() {
         if let Some(parent) = config_path.parent() {
             watcher.watch(parent, RecursiveMode::NonRecursive)?;

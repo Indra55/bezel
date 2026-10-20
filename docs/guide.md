@@ -1,6 +1,6 @@
 Bezel turns the edges of your Linux trackpad into a configurable control surface. Bind 1–4 fingers to taps, double taps, holds, swipes, and repeating slides. Normal center touches remain available to your desktop.
 
-This guide covers the current `main` branch. Name-based device selection is available on `main` after v1.0.0; it is not included in the v1.0.0 prebuilt binaries. See the [releases](https://github.com/Indra55/bezel/releases) for published versions.
+This guide covers the current `main` branch. Name-based device selection and the CLI options below require v1.1.0 or later. See the [releases](https://github.com/Indra55/bezel/releases) for published versions.
 
 ## Getting started
 
@@ -50,19 +50,41 @@ Use arrow keys or type a number, then press Enter. Escape goes back while preser
 
 The panel uses warm amber accents and previews that match the current step. It needs a UTF-8 terminal at least 80 columns × 24 rows; other terminals use numbered prompts. Terminal state is restored on exit, and shrinking the window switches to the numbered fallback.
 
-To configure a cloned checkout again:
+To edit your gesture bindings again:
 
 ```sh
-./onboard.sh
+bezel --configure
 ```
 
-Use `--plain` for numbered prompts, `--no-animation` to disable gesture animation, `--no-color` for monochrome, or `--color` to enable accents despite `NO_COLOR`. The plain flow offers basic per-edge choices followed by an advanced multi-finger binding editor.
+The flag requires v1.1.0 or later. Gesture Studio is included in the binary and requires Bash; editing an existing configuration also requires Python 3.11+. On NixOS, Bezel uses the packaged `bezel-onboard` helper with its bundled dependencies. From a cloned checkout, `./onboard.sh` still works.
+
+Use `bezel --configure --plain` for numbered prompts, `--no-animation` to disable gesture animation, `--no-color` for monochrome, or `--color` to enable accents despite `NO_COLOR`. These options follow `--configure`; `bezel --help` lists them. The plain flow offers basic per-edge choices followed by an advanced multi-finger binding editor.
 
 On upgrades, the installer asks whether to run onboarding again. Existing configurations are kept unless you choose **Apply configuration**, which creates a backup. **Save preview only** writes a separate preview, and Cancel leaves your configuration untouched.
 
 On NixOS, the installer prints a Home Manager snippet instead of creating an unmanaged TOML file or systemd service. Import the Bezel Home Manager module, add the snippet, and configure `hardware.uinput` plus the `input` and `uinput` groups in your NixOS configuration. The snippet includes the gesture command tools (`wpctl`, `brightnessctl`, `playerctl`).
 
 For Arch, Debian/Ubuntu, Fedora, and openSUSE, the same installer uses systemd user services and udev; you need Rust only when building from source or when a prebuilt binary is unavailable. The command tools above must be installed separately.
+
+### CLI options
+
+These options require v1.1.0 or later:
+
+```sh
+bezel --help
+bezel --check-config
+bezel --list-devices
+bezel --status
+bezel --config ./gestures.toml
+bezel --config ./gestures.toml --check-config
+bezel --config ./gestures.toml --configure --plain
+```
+
+`--check-config` parses and validates bindings, recognition settings, and zones without opening input devices or running commands. A missing or invalid file returns a nonzero exit status. Without an explicit path, normal daemon startup still uses built-in defaults when the default file is missing; an explicit `--config PATH` must exist. The selected file is also used for reloads. Gesture Studio can create a missing file or edit an existing one at that path, with the usual preview and backup options.
+
+`--list-devices` lists readable trackpads with type-B multitouch slots, including their names, device paths, and slot counts. It excludes Bezel's virtual trackpad and direct-touch devices, and never grabs devices. Unreadable input devices are reported; if none can be identified and the scan is incomplete, the command fails. It does not accept `--config`.
+
+`--status` requires systemd and queries the current user's `bezel.service`. It shows service state, PID, and open `/dev/input` paths when `/proc` permissions allow. It also validates the selected config on disk and prints its configured device. This config inspection does not prove which settings the running process loaded. Manually started daemons and differently named services are outside this status check. Inactive or uninstalled services are reported normally; a failed service query or invalid config returns a nonzero exit status.
 
 To define a gesture, specify the zone and direction, and the command to run:
 This example uses Hyprland 0.55+ syntax; older Hyprland releases use different dispatch commands.

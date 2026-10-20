@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use serde::Deserialize;
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::gesture::{Direction, Gesture, Zone};
 
@@ -273,14 +273,8 @@ pub fn get_config_path() -> PathBuf {
     }
 }
 
-pub fn load_config() -> Result<Config> {
-    let path = get_config_path();
-    if !path.exists() {
-        tracing::warn!("Config file not found at {:?}, using defaults", path);
-        return Ok(Config::default());
-    }
-
-    let content = std::fs::read_to_string(&path)
+pub fn load_config(path: &Path) -> Result<Config> {
+    let content = std::fs::read_to_string(path)
         .with_context(|| format!("Failed to read config file at {:?}", path))?;
     let config: Config = toml::from_str(&content).context("Failed to parse config.toml")?;
 

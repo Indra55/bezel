@@ -44,6 +44,9 @@ fi
 
 while [ "$#" -gt 0 ]; do
     case "$1" in
+        --config)
+            [ "$#" -ge 2 ] && [ -n "$2" ] || { echo "--config needs a path" >&2; exit 2; }
+            config_file="$2"; config_dir="$(dirname -- "$config_file")"; shift 2 ;;
         --desktop)
             [ "$#" -ge 2 ] || { echo "--desktop needs a value" >&2; exit 2; }
             desktop="$2"; desktop_explicit=1; shift 2 ;;

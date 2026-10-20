@@ -62,6 +62,80 @@ pub fn find_device_by_name(target_name: &str) -> Result<RawDevice> {
     );
 }
 
+pub fn list_trackpads() -> Result<()> {
+    let mut paths = std::fs::read_dir("/dev/input")
+        .context("Failed to read /dev/input")?
+        .map(|entry| entry.map(|entry| entry.path()))
+        .collect::<std::io::Result<Vec<_>>>()?;
+    paths.sort();
+    let mut found = 0;
+    let mut unreadable = 0;
+    for path in paths {
+        if !path
+            .file_name()
+            .is_some_and(|name| name.to_string_lossy().starts_with("event"))
+        {
+            continue;
+        }
+        let device = match RawDevice::open(&path) {
+            Ok(device) => device,
+            Err(_) => {
+                unreadable += 1;
+                continue;
+            }
+        };
+        if device.name() == Some("Bezel Virtual Trackpad")
+            || device.properties().contains(evdev::PropType::DIRECT)
+            || !device
+                .supported_keys()
+                .is_some_and(|keys| keys.contains(Key::BTN_TOOL_FINGER))
+            || !device.supported_absolute_axes().is_some_and(|axes| {
+                [
+                    Axis::ABS_X,
+                    Axis::ABS_Y,
+                    Axis::ABS_MT_POSITION_X,
+                    Axis::ABS_MT_POSITION_Y,
+                    Axis::ABS_MT_SLOT,
+                    Axis::ABS_MT_TRACKING_ID,
+                ]
+                .iter()
+                .all(|axis| axes.contains(*axis))
+            })
+        {
+            continue;
+        }
+        let axes = device.get_abs_state()?;
+        let slots = axes[Axis::ABS_MT_SLOT.0 as usize];
+        let x = axes[Axis::ABS_MT_POSITION_X.0 as usize];
+        let y = axes[Axis::ABS_MT_POSITION_Y.0 as usize];
+        if slots.minimum != 0
+            || !(0..256).contains(&slots.maximum)
+            || x.maximum <= x.minimum
+            || y.maximum <= y.minimum
+        {
+            continue;
+        }
+        println!(
+            "{}\t{}\t{} slots",
+            path.display(),
+            device.name().unwrap_or("Unknown"),
+            slots.maximum + 1
+        );
+        found += 1;
+    }
+    if found == 0 {
+        println!("No readable, compatible trackpads found.");
+    }
+    if unreadable > 0 {
+        eprintln!("Skipped {unreadable} unreadable input devices; check /dev/input permissions.");
+    }
+    ensure!(
+        found > 0 || unreadable == 0,
+        "Device scan is incomplete because input devices could not be read"
+    );
+    Ok(())
+}
+
 #[derive(Clone, Default)]
 struct Slot {
     id: Option<i32>,
