@@ -55,7 +55,7 @@
             postPatch = ''
               substituteInPlace src/dispatcher.rs \
                 --replace-fail '"sh"' '"${pkgs.runtimeShell}"' \
-                --replace-fail '"notify-send"' '"${lib.getExe' pkgs.libnotify "notify-send"}"'
+                --replace-fail 'Command::new("notify-send")' 'Command::new("${lib.getExe' pkgs.libnotify "notify-send"}")'
             '';
 
             meta = {
