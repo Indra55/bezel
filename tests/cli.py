@@ -77,6 +77,11 @@ class CliTests(unittest.TestCase):
         self.assertEqual(list(self.config.parent.iterdir()), [self.config])
 
     def test_embedded_studio_applies_binding_and_backs_up_existing_config(self):
+        existing = self.original + (
+            '\n[[apps."org.mozilla.firefox".bindings]]\n'
+            'zone="bottom"\nfingers=1\ngesture="swipe_right"\naction="command"\ncmd="true"\n'
+        )
+        self.config.write_text(existing)
         code, stdout, stderr = self.run_cli(
             '--configure', '--plain', '--no-color', '--toml', '--desktop', 'generic',
             answers=['1', '1', '2', '1', '31', 'printf custom', '', '', '4', '1'],
@@ -88,9 +93,12 @@ class CliTests(unittest.TestCase):
         self.assertEqual(config['zones']['left_width'], 0.12)
         self.assertEqual(config['device']['path'], 'auto')
         self.assertFalse(config['osd']['enabled'])
+        self.assertEqual(config['apps'], tomllib.loads(existing)['apps'])
+        check, stdout, stderr = self.run_cli('--check-config')
+        self.assertEqual(check, 0, stderr)
         backups = list(self.config.parent.glob('config.toml.backup.*'))
         self.assertEqual(len(backups), 1)
-        self.assertEqual(backups[0].read_text(), self.original)
+        self.assertEqual(backups[0].read_text(), existing)
 
     def test_studio_argument_errors_preserve_exit_status(self):
         code, stdout, stderr = self.run_cli('--configure', '--unknown')

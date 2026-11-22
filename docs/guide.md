@@ -171,6 +171,46 @@ Distances accept 0.001–1; times accept 1–10000 ms (`join_ms`: 1–1000), wit
 
 Pinch/zoom and double-tap swipes are not implemented. Multi-finger recognition requires independent **type-B multitouch slots**; devices that only report an aggregate finger count are unsupported. Input overflow cancels pending gestures and waits for contacts to lift. Normal center contacts remain available through Bezel's virtual trackpad.
 
+### App-aware edges
+
+With Bezel v1.2.0 or later on Niri and Hyprland, the same gesture can switch browser tabs, seek in a video, or move to the next open file. Gesture Studio offers an off-by-default **Context Swipes** preset for Brave. In the review screen, open **Context Swipes / Brave tabs** and choose **Enable Brave tab switching**. In `--plain` mode, choose **5) Context Swipes** under Advanced bindings. With `wtype` available, one finger along Brave's bottom edge switches to the previous tab on a left swipe and the next tab on a right swipe. The preset uses the `brave-browser` app ID.
+
+For additional apps, add `[[apps."APP_ID".bindings]]` to your TOML. Each entry uses the same fields and tuning overrides as `[[bindings]]`. A matching app entry takes priority for that edge, finger count, and gesture. Other gestures use the global bindings. Gesture Studio preserves app profiles while editing global bindings.
+
+Use the exact `app_id` from `niri msg --json focused-window` or `class` from `hyprctl -j activewindow`. The value is case-sensitive and can vary by package.
+
+```toml
+# Firefox: next tab
+[[apps."firefox".bindings]]
+zone = "bottom"
+fingers = 1
+gesture = "swipe_right"
+action = "command"
+cmd = "wtype -M ctrl -P Page_Down -p Page_Down -m ctrl"
+
+# VLC: seek forward ten seconds
+[[apps."vlc".bindings]]
+zone = "bottom"
+fingers = 1
+gesture = "swipe_right"
+action = "command"
+cmd = "playerctl --player=vlc position 10+"
+
+# VS Code: next editor tab
+[[apps."Code".bindings]]
+zone = "bottom"
+fingers = 1
+gesture = "swipe_right"
+action = "command"
+cmd = "wtype -M ctrl -P Page_Down -p Page_Down -m ctrl"
+```
+
+The shortcut examples use [wtype](https://github.com/atx/wtype). The VLC example uses [Playerctl](https://github.com/altdesktop/playerctl) with an MPRIS-enabled player. For the reverse gesture, add `swipe_left` entries using `Page_Up` and `position 10-`.
+
+Bezel captures the focused window when the first finger touches the edge. A focus change before dispatch cancels the app-specific action, even between windows of the same app. App commands receive `BEZEL_APP_ID` and `BEZEL_WINDOW_ID`. The window ID is decimal on Niri and a hex address on Hyprland. Use it for commands that can address a specific window, such as `niri msg action toggle-window-floating --id "$BEZEL_WINDOW_ID"`. Tools like `wtype` send keys to the window focused when they run. Bezel checks focus before launching them.
+
+Run `bezel --check-config` after editing. Bezel needs access to your session's IPC socket (`NIRI_SOCKET` on Niri, or `XDG_RUNTIME_DIR` and `HYPRLAND_INSTANCE_SIGNATURE` on Hyprland). Global bindings remain available when the compositor is unsupported or its socket cannot be reached.
+
 ### Action presets
 
 Gesture Studio offers up to **30 presets**, with **31** reserved for a custom shell command. The original preset numbers 1–16 are unchanged. Available actions depend on your compositor and installed tools.

@@ -67,6 +67,41 @@ impl Default for Recognition {
     }
 }
 
+impl Recognition {
+    fn validate(&self) -> Result<()> {
+        use anyhow::ensure;
+        for (name, value) in [
+            ("swipe_distance", self.swipe_distance),
+            ("tap_distance", self.tap_distance),
+            ("step_distance", self.step_distance),
+        ] {
+            ensure!(
+                value.is_finite() && (0.001..=1.0).contains(&value),
+                "{name} must be between 0.001 and 1"
+            );
+        }
+        ensure!(
+            (1..=1000).contains(&self.join_ms),
+            "join_ms must be between 1 and 1000"
+        );
+        for (name, value) in [
+            ("tap_ms", self.tap_ms),
+            ("double_tap_ms", self.double_tap_ms),
+            ("hold_ms", self.hold_ms),
+        ] {
+            ensure!(
+                (1..=10000).contains(&value),
+                "{name} must be between 1 and 10000"
+            );
+        }
+        ensure!(
+            self.join_ms <= self.tap_ms && self.join_ms <= self.hold_ms,
+            "join_ms must not exceed tap_ms or hold_ms"
+        );
+        Ok(())
+    }
+}
+
 #[derive(Debug, Deserialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct Binding {
@@ -84,6 +119,14 @@ pub struct Binding {
 }
 
 impl Binding {
+    fn resolve(&self, defaults: &Recognition) -> (GestureAction, Recognition) {
+        let action = GestureAction {
+            action: self.action.clone(),
+            cmd: self.cmd.clone(),
+        };
+        (action, self.settings(defaults))
+    }
+
     fn settings(&self, defaults: &Recognition) -> Recognition {
         Recognition {
             join_ms: defaults.join_ms,
@@ -95,6 +138,12 @@ impl Binding {
             step_distance: self.step_distance.unwrap_or(defaults.step_distance),
         }
     }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(deny_unknown_fields)]
+pub struct AppProfile {
+    bindings: Vec<Binding>,
 }
 
 #[derive(Debug, Deserialize, Clone)]
@@ -119,6 +168,8 @@ pub struct Config {
     pub recognition: Recognition,
     #[serde(default)]
     pub bindings: Vec<Binding>,
+    #[serde(default)]
+    pub apps: HashMap<String, AppProfile>,
     #[serde(default)]
     pub device: DeviceConfig,
     #[serde(default)]
@@ -255,6 +306,7 @@ impl Default for Config {
         Config {
             recognition: Recognition::default(),
             bindings: Vec::new(),
+            apps: HashMap::new(),
             device: DeviceConfig::default(),
             zones: ZonesConfig::default(),
             gestures,
@@ -283,6 +335,21 @@ pub fn load_config(path: &Path) -> Result<Config> {
 }
 
 impl Config {
+    pub fn app_binding(
+        &self,
+        app_id: &str,
+        zone: Zone,
+        fingers: u8,
+        gesture: Gesture,
+    ) -> Option<(GestureAction, Recognition)> {
+        self.apps
+            .get(app_id)?
+            .bindings
+            .iter()
+            .find(|b| b.zone == zone && b.fingers == fingers && b.gesture == gesture)
+            .map(|binding| binding.resolve(&self.recognition))
+    }
+
     pub fn binding(
         &self,
         zone: Zone,
@@ -294,13 +361,7 @@ impl Config {
             .iter()
             .find(|b| b.zone == zone && b.fingers == fingers && b.gesture == gesture)
         {
-            return Some((
-                GestureAction {
-                    action: b.action.clone(),
-                    cmd: b.cmd.clone(),
-                },
-                b.settings(&self.recognition),
-            ));
+            return Some(b.resolve(&self.recognition));
         }
         if fingers != 1 {
             return None;
@@ -314,38 +375,9 @@ impl Config {
 
     pub fn validate(&self) -> Result<()> {
         use anyhow::ensure;
-        fn settings(r: &Recognition) -> Result<()> {
-            for (name, value) in [
-                ("swipe_distance", r.swipe_distance),
-                ("tap_distance", r.tap_distance),
-                ("step_distance", r.step_distance),
-            ] {
-                ensure!(
-                    value.is_finite() && (0.001..=1.0).contains(&value),
-                    "{name} must be between 0.001 and 1"
-                );
-            }
-            ensure!(
-                (1..=1000).contains(&r.join_ms),
-                "join_ms must be between 1 and 1000"
-            );
-            for (name, value) in [
-                ("tap_ms", r.tap_ms),
-                ("double_tap_ms", r.double_tap_ms),
-                ("hold_ms", r.hold_ms),
-            ] {
-                ensure!(
-                    (1..=10000).contains(&value),
-                    "{name} must be between 1 and 10000"
-                );
-            }
-            ensure!(
-                r.join_ms <= r.tap_ms && r.join_ms <= r.hold_ms,
-                "join_ms must not exceed tap_ms or hold_ms"
-            );
-            Ok(())
-        }
-        settings(&self.recognition).context("Invalid recognition settings")?;
+        self.recognition
+            .validate()
+            .context("Invalid recognition settings")?;
         for width in [
             self.zones.left_width,
             self.zones.right_width,
@@ -365,8 +397,22 @@ impl Config {
                 );
             }
         }
+        self.validate_bindings(&self.bindings)?;
+        for (app_id, profile) in &self.apps {
+            ensure!(
+                !app_id.trim().is_empty(),
+                "App profiles require a nonempty app ID"
+            );
+            self.validate_bindings(&profile.bindings)
+                .with_context(|| format!("Invalid app profile {app_id:?}"))?;
+        }
+        Ok(())
+    }
+
+    fn validate_bindings(&self, bindings: &[Binding]) -> Result<()> {
+        use anyhow::ensure;
         let mut seen = std::collections::HashSet::new();
-        for (index, b) in self.bindings.iter().enumerate() {
+        for (index, b) in bindings.iter().enumerate() {
             let label = format!(
                 "binding {} ({:?}, {} fingers, {:?})",
                 index + 1,
@@ -413,7 +459,9 @@ impl Config {
                 b.swipe_distance.is_none() || (!tap && !hold && !slide),
                 "{label}: swipe_distance only applies to swipes"
             );
-            settings(&b.settings(&self.recognition)).with_context(|| label)?;
+            b.settings(&self.recognition)
+                .validate()
+                .with_context(|| label)?;
         }
         Ok(())
     }
@@ -457,5 +505,29 @@ mod tests {
             );
         }
         assert!(toml::from_str::<Config>(&format!("{binding}unknown=1")).is_err());
+    }
+
+    #[test]
+    fn app_profiles_reuse_binding_validation_and_scope_duplicates() {
+        let binding =
+            "zone='bottom'\nfingers=1\ngesture='swipe_right'\naction='command'\ncmd='true'\n";
+        let firefox = format!("[[apps.firefox.bindings]]\n{binding}");
+        let qualified_app = format!("[[apps.\"org.example.App\".bindings]]\n{binding}");
+        let accepted = format!("[[bindings]]\n{binding}{firefox}{qualified_app}");
+        toml::from_str::<Config>(&accepted)
+            .unwrap()
+            .validate()
+            .unwrap();
+
+        for invalid in [
+            format!("{firefox}{firefox}"),
+            firefox.replace("fingers=1", "fingers=5"),
+        ] {
+            let err = toml::from_str::<Config>(&invalid)
+                .unwrap()
+                .validate()
+                .unwrap_err();
+            assert!(err.to_string().contains("Invalid app profile \"firefox\""));
+        }
     }
 }

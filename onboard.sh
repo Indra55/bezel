@@ -16,6 +16,9 @@ ui_saved_stty=
 ui_fd=0
 generated=
 editing_existing=0
+brave_tabs=
+brave_helper=
+brave_status=
 
 detect_desktop() {
     local session="${XDG_CURRENT_DESKTOP:-${XDG_SESSION_DESKTOP:-}}"
@@ -388,6 +391,30 @@ try:
             if key in updated:
                 source[key] = updated[key]
 
+        brave_tabs = sys.argv[3]
+        if brave_tabs:
+            app_id = "brave-browser"
+            apps = source.get("apps", {})
+            profile = apps.get(app_id, {})
+            def binding_key(binding):
+                return (binding["zone"], binding["fingers"], binding["gesture"])
+            existing = {binding_key(binding): binding for binding in profile.get("bindings", [])}
+            gestures = [("bottom", 1, "swipe_left"), ("bottom", 1, "swipe_right")]
+            previous = {key: existing.pop(key, {}) for key in gestures}
+            if brave_tabs == "enable":
+                for binding in updated["apps"][app_id]["bindings"]:
+                    key = binding_key(binding)
+                    existing[key] = {**previous[key], **binding}
+            if existing:
+                profile["bindings"] = list(existing.values())
+                apps[app_id] = profile
+            else:
+                apps.pop(app_id, None)
+            if apps:
+                source["apps"] = apps
+            else:
+                source.pop("apps", None)
+
         def scalar(value):
             if isinstance(value, (datetime.date, datetime.time)):
                 return value.isoformat()
@@ -545,6 +572,69 @@ emit_bindings() {
     done
 }
 
+context_swipes_available() {
+    [[ "$desktop" = niri || "$desktop" = hyprland ]]
+}
+
+context_swipes_menu() {
+    local helper choice
+    if [ "$ui_frontend" -eq 1 ]; then
+        menu_labels=('Keep current settings' 'Enable Brave tab switching' 'Remove Brave tab swipes')
+        menu_values=(keep enable remove)
+        panel_menu 'Context Swipes / Brave' context_swipes || return 0
+        choice="$answer"
+    else
+        while :; do
+            ask 'Context Swipes / Brave  1) Enable tab switching  2) Remove tab swipes  [Enter keeps]: '
+            case "$answer" in
+                '') return 0 ;;
+                1) choice=enable; break ;;
+                2) choice=remove; break ;;
+                *) echo 'Choose 1, 2, or press Enter.' >&2 ;;
+            esac
+        done
+    fi
+
+    case "$choice" in
+        enable)
+            if [ "$declarative" -eq 1 ]; then
+                brave_helper=wtype
+            else
+                helper="$(type -P wtype || true)"
+                if [ -z "$helper" ] && [ -x "$HOME/.local/bin/wtype" ]; then helper="$HOME/.local/bin/wtype"; fi
+                if [ -z "$helper" ]; then
+                    if [ "$ui_frontend" -eq 1 ]; then brave_status='Install wtype to enable Brave tab switching.'
+                    else echo 'Install wtype to enable Brave tab switching.' >&2; fi
+                    return 0
+                fi
+                if [[ "$helper" != /* ]]; then helper="$PWD/$helper"; fi
+                brave_helper="'${helper//\'/\'\\\'\'}'"
+            fi
+            brave_tabs=enable
+            brave_status='Brave tabs assigned to bottom-edge left and right swipes.' ;;
+        remove)
+            brave_tabs=remove
+            brave_status='Brave tab swipes removed.' ;;
+    esac
+}
+
+emit_context_swipes() {
+    [ "$brave_tabs" = enable ] || return 0
+    local format="$1" direction key cmd
+    if [ "$format" = nix ]; then printf '  apps."brave-browser".bindings = [\n'; fi
+    for direction in left right; do
+        key=Page_Up
+        if [ "$direction" = right ]; then key=Page_Down; fi
+        cmd="$(escape_command "$brave_helper -M ctrl -P $key -p $key -m ctrl" "$format")"
+        if [ "$format" = nix ]; then
+            printf '    { zone = "bottom"; fingers = 1; gesture = "swipe_%s"; action = "command"; cmd = "%s"; }\n' "$direction" "$cmd"
+        else
+            printf '\n[[apps."brave-browser".bindings]]\nzone = "bottom"\nfingers = 1\ngesture = "swipe_%s"\naction = "command"\ncmd = "%s"\n' "$direction" "$cmd"
+        fi
+    done
+    if [ "$format" = nix ]; then printf '  ];\n'; fi
+}
+
 setting_error() {
     if [ "$ui_frontend" -eq 1 ]; then ui_notice="$1"; else printf '%s\n' "$1" >&2; fi
 }
@@ -623,7 +713,9 @@ if [ "$input_source" != none ]; then
     while :; do
         printf '\nAdvanced bindings (override quick setup):\n' >&2
         for key in "${!advanced_commands[@]}"; do printf '  %s → %s\n' "$key" "${advanced_commands[$key]}" >&2; done
-        ask '1) Add/edit binding  2) Delete binding  3) Shared sensitivity  4) Finish [Enter = 4]: '
+        printf '1) Add/edit binding  2) Delete binding  3) Shared sensitivity  4) Finish' >&2
+        if context_swipes_available; then printf '  5) Context Swipes' >&2; fi
+        ask ' [Enter = 4]: '
         case "${answer:-4}" in
             1|2)
                 operation="$answer"
@@ -668,7 +760,8 @@ if [ "$input_source" != none ]; then
                     if [ -n "$answer" ]; then recognition[$setting]="$answer"; fi
                 done ;;
             4|'') break ;;
-            *) echo 'Choose 1, 2, 3, or 4.' >&2 ;;
+            5) if context_swipes_available; then context_swipes_menu; else echo 'Context Swipes require Niri or Hyprland.' >&2; fi ;;
+            *) echo 'Choose a number from the menu.' >&2 ;;
         esac
     done
 fi
@@ -686,6 +779,7 @@ done
     for key in "${!advanced_commands[@]}"; do
         printf '  %s → %s\n' "$key" "${advanced_commands[$key]}" >&2
     done
+    if [ "$brave_tabs" = enable ]; then printf '  Brave / bottom edge / previous and next tab\n' >&2; fi
 }
 
 set_desktop_defaults() {
@@ -817,6 +911,8 @@ panel_context() {
                 ui_action="$(action_name "${bindings[$edge.$direction]}")"
             elif [ "$value" = 1 ] && [ "$declarative" -eq 0 ]; then
                 ui_notice='Saves controls with a backup; keeps device, zone and OSD settings.'
+            elif [ "$value" = context_swipes ]; then
+                ui_notice="$brave_status"
             fi ;;
     esac
 }
@@ -1369,6 +1465,10 @@ panel_review() {
             menu_labels=('Save preview only' 'Apply configuration' 'Back to bindings' Cancel)
             menu_values=(2 1 back 3)
         fi
+        if context_swipes_available; then
+            menu_labels+=('Context Swipes / Brave tabs')
+            menu_values+=(context_swipes)
+        fi
         for edge in left right top bottom; do
             for direction in up down left right tap; do
                 key="$edge.$direction"
@@ -1399,6 +1499,7 @@ panel_review() {
             back) return 1 ;;
             3) panel_cleanup; printf 'Cancelled; configuration untouched.\n'; exit 0 ;;
             1|2) save_choice="$answer"; return 0 ;;
+            context_swipes) selection=$ui_selected; context_swipes_menu ;;
             binding:*)
                 local selected_key="${answer#binding:}" edge fingers gesture
                 IFS=. read -r edge fingers gesture <<< "$selected_key"
@@ -1459,7 +1560,13 @@ if [ "$declarative" -eq 1 ]; then
     cat <<'NIX'
 # Import Bezel's Home Manager module, then add:
 services.bezel.enable = true;
-home.packages = with pkgs; [ wireplumber brightnessctl playerctl ];
+NIX
+    if [ "$brave_tabs" = enable ]; then
+        printf 'home.packages = with pkgs; [ wireplumber brightnessctl playerctl wtype ];\n'
+    else
+        printf 'home.packages = with pkgs; [ wireplumber brightnessctl playerctl ];\n'
+    fi
+    cat <<'NIX'
 services.bezel.config = {
   zones = { left_width = 0.08; right_width = 0.08; top_height = 0.08; bottom_height = 0.08; };
   gestures = {
@@ -1467,6 +1574,7 @@ NIX
     emit_bindings nix
     printf '  };\n'
     emit_advanced nix
+    emit_context_swipes nix
     printf '};\n'
     printf '# Also enable hardware.uinput and add your user to the input and uinput groups in NixOS.\n' >&2
     exit 0
@@ -1479,9 +1587,10 @@ generated="$(mktemp "$config_dir/.config.toml.XXXXXX")"
     printf '[zones]\nleft_width = 0.08\nright_width = 0.08\ntop_height = 0.08\nbottom_height = 0.08\n'
     emit_bindings toml
     emit_advanced toml
+    emit_context_swipes toml
 } > "$generated"
 if [ "$editing_existing" -eq 1 ]; then
-    if ! existing_config "$generated"; then rm -f -- "$generated"; exit 1; fi
+    if ! existing_config "$generated" "$brave_tabs"; then rm -f -- "$generated"; exit 1; fi
 fi
 
 if [ -e "$config_file" ] || [ -L "$config_file" ]; then

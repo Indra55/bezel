@@ -1,13 +1,14 @@
 use anyhow::{Context, Result};
 use notify::{Event, RecursiveMode, Watcher};
 use tokio::sync::{mpsc, watch};
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use tracing_subscriber::{EnvFilter, FmtSubscriber};
 
 mod cli;
 mod config;
 mod device;
 mod dispatcher;
+mod focus;
 mod gesture;
 mod passthrough;
 mod status;
@@ -15,6 +16,7 @@ mod status;
 use config::load_config;
 use device::run_input_reader;
 use dispatcher::run_dispatcher;
+use focus::Compositor;
 use gesture::{ActionCommand, Gesture, GestureEvent};
 
 #[tokio::main]
@@ -36,11 +38,18 @@ async fn main() -> Result<()> {
     let (gesture_tx, mut gesture_rx) = mpsc::channel::<GestureEvent>(64); // Input reader bursts
     let (action_tx, action_rx) = mpsc::channel::<ActionCommand>(32); // Lower volume
 
-    let input_reader = tokio::spawn(run_input_reader(config_rx, gesture_tx));
+    let (focus_tx, focus_rx) = watch::channel(None);
+    let compositor = Compositor::detect();
+    if let Some(compositor) = compositor.clone() {
+        tokio::spawn(compositor.monitor(config_rx.clone(), focus_tx));
+    } else if !initial_config.apps.is_empty() {
+        warn!("App profiles require access to a Niri or Hyprland session");
+    }
+    let input_reader = tokio::spawn(run_input_reader(config_rx, gesture_tx, focus_rx.clone()));
 
     let osd_config = initial_config.osd.clone();
     tokio::spawn(async move {
-        run_dispatcher(action_rx, osd_config).await;
+        run_dispatcher(action_rx, osd_config, compositor, focus_rx).await;
     });
 
     // Setup hot-reloading for config
@@ -92,6 +101,7 @@ async fn main() -> Result<()> {
         let cmd = ActionCommand {
             cmd: event.action.cmd,
             osd_message: Some(message),
+            target: event.target,
         };
         let _ = action_tx.send(cmd).await;
     }

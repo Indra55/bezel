@@ -9,6 +9,7 @@ use std::time::{Duration, Instant};
 use tracing::{error, info};
 
 use crate::config::Config;
+use crate::focus::Focus;
 use crate::gesture::{Contact, GestureEvent, Recognizer};
 use crate::passthrough::create_virtual_device;
 
@@ -359,6 +360,7 @@ impl InputState {
 pub async fn run_input_reader(
     config_rx: tokio::sync::watch::Receiver<Config>,
     gesture_tx: tokio::sync::mpsc::Sender<GestureEvent>,
+    focus: tokio::sync::watch::Receiver<Focus>,
 ) -> Result<()> {
     let config = config_rx.borrow().clone();
     let mut device = if config.device.path == "auto" {
@@ -398,6 +400,7 @@ pub async fn run_input_reader(
             (y.maximum - y.minimum) as f32,
         ),
     );
+    state.recognizer = Recognizer::with_focus(focus);
     let supported_axes = device
         .supported_absolute_axes()
         .map(|axes| axes.iter().collect::<Vec<_>>())

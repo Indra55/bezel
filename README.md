@@ -9,6 +9,7 @@ https://github.com/user-attachments/assets/f56bbd12-6394-4726-b41b-ba38439b61e5
 - Taps, double taps, holds, eight swipe directions, and repeating slides.
 - Gesture Studio: a terminal wizard with gesture previews, 30 action presets, and custom commands.
 - Different bindings for each edge and finger count, with shared or per-binding sensitivity.
+- [Context Swipes](docs/guide.md#app-aware-edges) for per-app bindings on Niri and Hyprland.
 - NixOS and Home Manager support, plus compatible legacy one-finger configuration.
 - Normal center touches remain available to your desktop.
 

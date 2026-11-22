@@ -1,7 +1,10 @@
 use serde::Deserialize;
 use std::collections::HashSet;
+use std::sync::Arc;
+use tokio::sync::watch;
 
 use crate::config::{Config, GestureAction, Recognition};
+use crate::focus::{same_focus, Focus, FocusedWindow};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -61,11 +64,13 @@ pub struct GestureEvent {
     pub magnitude: f32,
     pub finger_count: u8,
     pub action: GestureAction,
+    pub target: Focus,
 }
 
 pub struct ActionCommand {
     pub cmd: String,
     pub osd_message: Option<String>,
+    pub target: Focus,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -85,6 +90,7 @@ struct Member {
 
 struct Session {
     config: Config,
+    focus: Focus,
     zone: Zone,
     started: u64,
     members: Vec<Member>,
@@ -105,6 +111,7 @@ struct PendingTap {
     deadline: u64,
     tolerance: f32,
     event: Option<GestureEvent>,
+    target: Focus,
 }
 
 #[derive(Default)]
@@ -112,6 +119,7 @@ pub struct Recognizer {
     session: Option<Session>,
     previous: HashSet<i32>,
     pending: Option<PendingTap>,
+    focus: Option<watch::Receiver<Focus>>,
 }
 
 pub fn determine_zone(x: f32, y: f32, config: &Config) -> Option<Zone> {
@@ -128,20 +136,44 @@ pub fn determine_zone(x: f32, y: f32, config: &Config) -> Option<Zone> {
     }
 }
 
+struct GestureBinding<'a> {
+    action: GestureAction,
+    settings: Recognition,
+    target: Option<&'a Arc<FocusedWindow>>,
+}
+
 impl Session {
     fn fingers(&self) -> u8 {
         self.members.len() as u8
     }
-    fn settings(&self, gesture: Gesture) -> Option<(GestureAction, Recognition)> {
-        self.config.binding(self.zone, self.fingers(), gesture)
+    fn binding(&self, gesture: Gesture) -> Option<GestureBinding<'_>> {
+        if let Some(window) = &self.focus {
+            if let Some((action, settings)) =
+                self.config
+                    .app_binding(&window.app_id, self.zone, self.fingers(), gesture)
+            {
+                return Some(GestureBinding {
+                    action,
+                    settings,
+                    target: Some(window),
+                });
+            }
+        }
+        let (action, settings) = self.config.binding(self.zone, self.fingers(), gesture)?;
+        Some(GestureBinding {
+            action,
+            settings,
+            target: None,
+        })
     }
     fn event(&self, gesture: Gesture, magnitude: f32) -> Option<GestureEvent> {
-        self.settings(gesture).map(|(action, _)| GestureEvent {
+        self.binding(gesture).map(|binding| GestureEvent {
             zone: self.zone,
             gesture,
             magnitude,
             finger_count: self.fingers(),
-            action,
+            action: binding.action,
+            target: binding.target.cloned(),
         })
     }
     fn motion(&self) -> (f32, f32) {
@@ -159,13 +191,22 @@ impl Session {
 }
 
 impl Recognizer {
+    pub fn with_focus(focus: watch::Receiver<Focus>) -> Self {
+        Self {
+            focus: Some(focus),
+            ..Self::default()
+        }
+    }
+
     pub fn claimed(&self, id: i32) -> bool {
         self.session
             .as_ref()
             .is_some_and(|s| s.members.iter().any(|m| m.start.id == id))
     }
     pub fn reset(&mut self) {
-        *self = Self::default();
+        self.session = None;
+        self.previous.clear();
+        self.pending = None;
     }
 
     /// Advance using complete input frames, or the last frame when a timer expires.
@@ -184,6 +225,7 @@ impl Recognizer {
             {
                 self.session = Some(Session {
                     config: config.clone(),
+                    focus: self.focus.as_ref().and_then(|focus| focus.borrow().clone()),
                     zone,
                     started: now,
                     members: vec![Member {
@@ -238,7 +280,7 @@ impl Recognizer {
             let ended = s.members.iter().all(|m| !m.active);
             let all_down = s.members.iter().all(|m| m.active);
             if s.frozen && !s.cancelled && !s.consumed && all_down {
-                if let Some((_, settings)) = s.settings(Gesture::Hold) {
+                if let Some(GestureBinding { settings, .. }) = s.binding(Gesture::Hold) {
                     if elapsed >= settings.hold_ms && s.max_motion <= settings.tap_distance {
                         s.emit(Gesture::Hold, 0.0, &mut out);
                         s.consumed = true;
@@ -276,7 +318,7 @@ impl Recognizer {
                         false,
                     )
                 };
-                if let Some((_, settings)) = s.settings(gesture) {
+                if let Some(GestureBinding { settings, .. }) = s.binding(gesture) {
                     let steps = (distance / settings.step_distance).floor() as usize;
                     for _ in 0..steps {
                         s.emit(gesture, settings.step_distance, &mut out);
@@ -308,7 +350,7 @@ impl Recognizer {
                     };
                     let direction = if dx.abs().min(dy.abs())
                         >= dx.abs().max(dy.abs()) * (std::f32::consts::PI / 8.0).tan()
-                        && s.settings(diagonal).is_some()
+                        && s.binding(diagonal).is_some()
                     {
                         diagonal
                     } else if dx.abs() > dy.abs() {
@@ -322,13 +364,18 @@ impl Recognizer {
                     } else {
                         Gesture::SwipeUp
                     };
-                    if s.settings(direction)
-                        .is_some_and(|(_, r)| magnitude >= r.swipe_distance)
+                    if s.binding(direction)
+                        .is_some_and(|b| magnitude >= b.settings.swipe_distance)
                     {
                         s.emit(direction, magnitude, &mut out);
                     } else {
-                        let double = s.settings(Gesture::DoubleTap);
-                        let single = s.settings(Gesture::Tap);
+                        let double = s.binding(Gesture::DoubleTap);
+                        let single = s.binding(Gesture::Tap);
+                        let tap_target = double
+                            .as_ref()
+                            .and_then(|b| b.target)
+                            .or_else(|| single.as_ref().and_then(|b| b.target))
+                            .cloned();
                         let qualifies =
                             |r: &Recognition| elapsed <= r.tap_ms && s.max_motion <= r.tap_distance;
                         let start = s.members[0].start;
@@ -337,9 +384,12 @@ impl Recognizer {
                                 && p.fingers == s.fingers()
                                 && s.started >= p.released
                                 && now <= p.deadline
+                                && same_focus(&p.target, &tap_target)
                                 && (start.x - p.start.x).hypot(start.y - p.start.y) <= p.tolerance
                         });
-                        if matches_pending && double.as_ref().is_some_and(|(_, r)| qualifies(r)) {
+                        if matches_pending
+                            && double.as_ref().is_some_and(|b| qualifies(&b.settings))
+                        {
                             self.pending = None;
                             s.emit(Gesture::DoubleTap, magnitude, &mut out);
                         } else {
@@ -349,17 +399,20 @@ impl Recognizer {
                                 }
                             }
                             let event = single
-                                .filter(|(_, r)| qualifies(r))
+                                .filter(|b| qualifies(&b.settings))
                                 .and_then(|_| s.event(Gesture::Tap, magnitude));
-                            if let Some((_, r)) = double.filter(|(_, r)| qualifies(r)) {
+                            if let Some(GestureBinding { settings, .. }) =
+                                double.filter(|b| qualifies(&b.settings))
+                            {
                                 self.pending = Some(PendingTap {
                                     zone: s.zone,
                                     fingers: s.fingers(),
                                     start,
                                     released: now,
-                                    deadline: now + r.double_tap_ms,
-                                    tolerance: r.tap_distance,
+                                    deadline: now + settings.double_tap_ms,
+                                    tolerance: settings.tap_distance,
                                     event,
+                                    target: tap_target,
                                 });
                             } else if let Some(event) = event {
                                 out.push(event);
@@ -557,5 +610,102 @@ mod tests {
         r.update(&[], 450, &c);
         r.reset();
         assert!(r.update(&[], 800, &c).is_empty());
+    }
+
+    #[test]
+    fn app_swipe_keeps_the_window_and_binding_from_touch_down() {
+        let config: Config = toml::from_str(
+            r#"
+            [gestures.bottom.right]
+            action = "command"
+            cmd = "global"
+
+            [[apps.firefox.bindings]]
+            zone = "bottom"
+            fingers = 1
+            gesture = "swipe_right"
+            action = "command"
+            cmd = "next tab"
+
+            [[apps.vlc.bindings]]
+            zone = "bottom"
+            fingers = 1
+            gesture = "swipe_right"
+            action = "command"
+            cmd = "seek forward"
+        "#,
+        )
+        .unwrap();
+        config.validate().unwrap();
+        let browser = Arc::new(FocusedWindow {
+            app_id: "firefox".into(),
+            id: "12".into(),
+        });
+        let player = Arc::new(FocusedWindow {
+            app_id: "vlc".into(),
+            id: "14".into(),
+        });
+        let (tx, rx) = watch::channel(Some(browser.clone()));
+        let mut recognizer = Recognizer::with_focus(rx);
+
+        recognizer.update(&[finger(1, 0.4, 0.98)], 0, &config);
+        tx.send_replace(Some(player.clone()));
+        let released = |id| Contact {
+            active: false,
+            ..finger(id, 0.7, 0.98)
+        };
+        let first = recognizer.update(&[released(1)], 100, &config);
+        assert_eq!(first[0].action.cmd, "next tab");
+        assert!(Arc::ptr_eq(first[0].target.as_ref().unwrap(), &browser));
+
+        // A reset after input overflow keeps observing focus for future gestures.
+        recognizer.reset();
+        recognizer.update(&[finger(2, 0.4, 0.98)], 200, &config);
+        let second = recognizer.update(&[released(2)], 300, &config);
+        assert_eq!(second[0].action.cmd, "seek forward");
+        assert!(Arc::ptr_eq(second[0].target.as_ref().unwrap(), &player));
+
+        tx.send_replace(None);
+        recognizer.update(&[finger(3, 0.4, 0.98)], 400, &config);
+        let third = recognizer.update(&[released(3)], 500, &config);
+        assert_eq!(third[0].action.cmd, "global");
+        assert!(third[0].target.is_none());
+    }
+
+    #[test]
+    fn app_double_tap_does_not_pair_across_windows_of_the_same_app() {
+        let config: Config = toml::from_str(
+            r#"
+            [[apps.firefox.bindings]]
+            zone = "left"
+            fingers = 1
+            gesture = "double_tap"
+            action = "command"
+            cmd = "double tap"
+        "#,
+        )
+        .unwrap();
+        let focus = |id: &str| {
+            Some(Arc::new(FocusedWindow {
+                app_id: "firefox".into(),
+                id: id.into(),
+            }))
+        };
+        let (tx, rx) = watch::channel(focus("1"));
+        let mut recognizer = Recognizer::with_focus(rx);
+        let released = |id| Contact {
+            active: false,
+            ..finger(id, 0.01, 0.5)
+        };
+        recognizer.update(&[finger(1, 0.01, 0.5)], 0, &config);
+        assert!(recognizer.update(&[released(1)], 30, &config).is_empty());
+        tx.send_replace(focus("2"));
+        recognizer.update(&[finger(2, 0.01, 0.5)], 60, &config);
+        assert!(recognizer.update(&[released(2)], 90, &config).is_empty());
+        recognizer.update(&[finger(3, 0.01, 0.5)], 120, &config);
+        assert_eq!(
+            kinds(recognizer.update(&[released(3)], 150, &config)),
+            [Gesture::DoubleTap]
+        );
     }
 }

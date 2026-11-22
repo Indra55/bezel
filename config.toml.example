@@ -100,3 +100,12 @@ step_distance = 0.03
 # action = "command"
 # cmd = "playerctl play-pause"
 # hold_ms = 600
+
+# Optional app-specific override on Niri or Hyprland.
+# Use the exact app_id from `niri msg --json focused-window` or class from `hyprctl -j activewindow`.
+# [[apps."firefox".bindings]]
+# zone = "bottom"
+# fingers = 1
+# gesture = "swipe_right"
+# action = "command"
+# cmd = "wtype -M ctrl -P Page_Down -p Page_Down -m ctrl"

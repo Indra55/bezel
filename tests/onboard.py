@@ -58,14 +58,14 @@ class OnboardingTests(unittest.TestCase):
         self.config.parent.mkdir()
         original = "# preserve me\n[device]\npath='auto'\n"
         self.config.write_text(original)
-        self.run_wizard(["1"] * 4 + ["4", "2"])
+        self.run_wizard(["4", "2"])
         self.assertEqual(self.config.read_text(), original)
         previews = list(self.config.parent.glob("config.preview.*.toml"))
         self.assertEqual(len(previews), 1)
         tomllib.loads(previews[0].read_text())
-        self.run_wizard(["1"] * 4 + ["4", "3"])
+        self.run_wizard(["4", "3"])
         self.assertEqual(self.config.read_text(), original)
-        self.run_wizard(["1"] * 4 + ["4", "1"])
+        self.run_wizard(["4", "1"])
         self.assertEqual(next(self.config.parent.glob("config.toml.backup.*")).read_text(), original)
         self.assertIn("recognition", tomllib.loads(self.config.read_text()))
 
@@ -96,6 +96,7 @@ class OnboardingTests(unittest.TestCase):
         }
         for desktop, commands in expected.items():
             with self.subTest(desktop=desktop):
+                self.config.unlink(missing_ok=True)
                 answers = ["1"] * 4
                 for gesture, action in enumerate(range(17, 24), 4):
                     answers += ["1", "1", "2", str(gesture), str(action), ""]
@@ -130,6 +131,51 @@ class OnboardingTests(unittest.TestCase):
         self.run_wizard(["1"] * 4 + ["1", "1", "2", "4", "17", "1", "", "4"])
         binding = tomllib.loads(self.config.read_text())["bindings"][0]
         self.assertEqual(binding["cmd"], "wpctl set-volume @DEFAULT_SINK@ 5%+")
+
+    def test_brave_context_swipes_are_opt_in(self):
+        tools = Path(self.tmp.name) / "test tools"
+        tools.mkdir()
+        wtype = tools / "wtype"
+        wtype.write_text("#!/bin/sh\nexit 99\n")
+        wtype.chmod(0o755)
+        path = f"{tools}:{os.environ['PATH']}"
+        self.run_wizard(["1"] * 4 + ["4"], desktop="niri", path=path)
+        self.assertNotIn("apps", tomllib.loads(self.config.read_text()))
+
+        original = self.config.read_text() + '''
+[[apps."brave-browser".bindings]]
+zone = "bottom"
+fingers = 1
+gesture = "tap"
+action = "command"
+cmd = "keep Brave tap"
+
+[[apps.firefox.bindings]]
+zone = "bottom"
+fingers = 1
+gesture = "swipe_right"
+action = "command"
+cmd = "keep Firefox swipe"
+'''
+        self.config.write_text(original)
+        self.run_wizard(["5", "1", "4", "1"], desktop="niri", path=path)
+        profiles = tomllib.loads(self.config.read_text())["apps"]
+        commands = {b["gesture"]: b["cmd"] for b in profiles["brave-browser"]["bindings"]}
+        self.assertEqual(commands, {
+            "tap": "keep Brave tap",
+            "swipe_left": f"'{wtype}' -M ctrl -P Page_Up -p Page_Up -m ctrl",
+            "swipe_right": f"'{wtype}' -M ctrl -P Page_Down -p Page_Down -m ctrl",
+        })
+        self.assertEqual(profiles["firefox"], tomllib.loads(original)["apps"]["firefox"])
+
+        self.run_wizard(["5", "2", "4", "1"], desktop="niri", path=path)
+        self.assertEqual(tomllib.loads(self.config.read_text())["apps"], tomllib.loads(original)["apps"])
+
+    def test_brave_context_swipes_nix_output(self):
+        output = self.run_wizard(["1"] * 4 + ["5", "1", "4"], nix=True, desktop="hyprland")
+        self.assertIn("playerctl wtype ];", output)
+        self.assertIn('apps."brave-browser".bindings = [', output)
+        self.assertIn('cmd = "wtype -M ctrl -P Page_Down -p Page_Down -m ctrl";', output)
 
 
 if __name__ == "__main__":
