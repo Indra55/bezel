@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use notify::{Event, RecursiveMode, Watcher};
 use tokio::sync::{mpsc, watch};
 use tracing::{error, info};
@@ -36,12 +36,7 @@ async fn main() -> Result<()> {
     let (gesture_tx, mut gesture_rx) = mpsc::channel::<GestureEvent>(64); // Input reader bursts
     let (action_tx, action_rx) = mpsc::channel::<ActionCommand>(32); // Lower volume
 
-    let config_rx_for_reader = config_rx.clone();
-    tokio::spawn(async move {
-        if let Err(e) = run_input_reader(config_rx_for_reader, gesture_tx).await {
-            error!("Input reader error: {:?}", e);
-        }
-    });
+    let input_reader = tokio::spawn(run_input_reader(config_rx, gesture_tx));
 
     let osd_config = initial_config.osd.clone();
     tokio::spawn(async move {
@@ -100,5 +95,8 @@ async fn main() -> Result<()> {
         };
         let _ = action_tx.send(cmd).await;
     }
-    Ok(())
+    input_reader
+        .await
+        .context("Input reader task failed")?
+        .context("Input reader failed")
 }

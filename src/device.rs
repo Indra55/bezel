@@ -4,12 +4,15 @@ use evdev::{
     Synchronization,
 };
 use std::collections::BTreeMap;
+use std::os::fd::AsRawFd;
 use std::time::{Duration, Instant};
 use tracing::{error, info};
 
 use crate::config::Config;
 use crate::gesture::{Contact, GestureEvent, Recognizer};
 use crate::passthrough::create_virtual_device;
+
+nix::ioctl_read_buf!(eviocgmtslots, b'E', 0x0a, i32);
 
 pub fn find_trackpad() -> Result<RawDevice> {
     for entry in std::fs::read_dir("/dev/input").context("Failed to read /dev/input")? {
@@ -316,6 +319,41 @@ impl InputState {
         }
         self.forward()
     }
+
+    fn restore_slot_axes(
+        &mut self,
+        supported_axes: &[Axis],
+        mut read_axis: impl FnMut(Axis, &mut [i32]) -> Result<()>,
+    ) -> Result<()> {
+        // EVIOCGMTSLOTS takes the axis code followed by one value per slot.
+        let mut values = vec![0; self.slots.len() + 1];
+        for &axis in supported_axes {
+            if !mt(axis) || matches!(axis, Axis::ABS_MT_SLOT | Axis::ABS_MT_TRACKING_ID) {
+                continue;
+            }
+            values[0] = i32::from(axis.0);
+            read_axis(axis, &mut values)?;
+            for (slot, &value) in self.slots.iter_mut().zip(&values[1..]) {
+                slot.axes.insert(axis.0, value);
+            }
+        }
+        Ok(())
+    }
+
+    fn sync_when_idle(&mut self, device: &RawDevice, supported_axes: &[Axis]) -> Result<bool> {
+        if device.get_key_state()?.contains(Key::BTN_TOUCH) {
+            return Ok(false);
+        }
+        // Type-B devices can omit values that are unchanged from a slot's previous contact.
+        self.restore_slot_axes(supported_axes, |axis, values| {
+            // SAFETY: The device fd is live and values holds the axis code and all slot values.
+            unsafe { eviocgmtslots(device.as_raw_fd(), values) }
+                .with_context(|| format!("Failed to read trackpad slot values for {axis:?}"))?;
+            Ok(())
+        })?;
+        self.current = device.get_abs_state()?[Axis::ABS_MT_SLOT.0 as usize].value as usize;
+        Ok(true)
+    }
 }
 
 pub async fn run_input_reader(
@@ -360,12 +398,11 @@ pub async fn run_input_reader(
             (y.maximum - y.minimum) as f32,
         ),
     );
-    state.current = slot.value as usize;
-    let mut recovering = device.get_key_state()?.contains(Key::BTN_TOUCH);
     let supported_axes = device
         .supported_absolute_axes()
         .map(|axes| axes.iter().collect::<Vec<_>>())
         .unwrap_or_default();
+    let mut recovering = !state.sync_when_idle(&device, &supported_axes)?;
     let mut stream = device.into_event_stream()?;
     let mut frame = Vec::new();
     let clock = Instant::now();
@@ -396,11 +433,7 @@ pub async fn run_input_reader(
                     }
                     InputEventKind::Synchronization(Synchronization::SYN_REPORT) => {
                         if recovering {
-                            if !stream.device().get_key_state()?.contains(Key::BTN_TOUCH) {
-                                recovering = false;
-                                state.current = stream.device().get_abs_state()?[Axis::ABS_MT_SLOT.0 as usize].value as usize;
-                                for slot in &mut state.slots { slot.axes.clear(); }
-                            }
+                            recovering = !state.sync_when_idle(stream.device(), &supported_axes)?;
                             frame.clear(); continue;
                         }
                         (output, gestures) = state.frame(&frame, clock.elapsed().as_millis() as u64, &config_rx.borrow());
@@ -595,6 +628,56 @@ mod tests {
         assert!(has(&out, InputEventKind::Key(Key::BTN_TOUCH), 0));
         assert!(s.tick(600, &c).is_empty());
     }
+
+    #[test]
+    fn recovered_contact_uses_coordinates_omitted_from_its_first_frame() {
+        let mut state = InputState::new(2, (0.0, 1000.0, 0.0, 1000.0));
+        let config = Config::default();
+        state.frame(&start(1, 10, 10, 500), 0, &config);
+        state.reset();
+        state
+            .restore_slot_axes(
+                &[
+                    Axis::ABS_MT_SLOT,
+                    Axis::ABS_MT_TRACKING_ID,
+                    Axis::ABS_MT_POSITION_X,
+                    Axis::ABS_MT_POSITION_Y,
+                ],
+                |axis, values| {
+                    assert_eq!(values[0], i32::from(axis.0));
+                    match axis {
+                        Axis::ABS_MT_POSITION_X => values[1..].copy_from_slice(&[20, 600]),
+                        Axis::ABS_MT_POSITION_Y => values[1..].copy_from_slice(&[300, 500]),
+                        _ => panic!("unexpected slot query for {axis:?}"),
+                    }
+                    Ok(())
+                },
+            )
+            .unwrap();
+        assert!(state.contacts().is_empty());
+
+        let (out, gestures) = state.frame(
+            &[
+                abs(Axis::ABS_MT_SLOT, 1),
+                abs(Axis::ABS_MT_TRACKING_ID, 11),
+                abs(Axis::ABS_MT_POSITION_Y, 550),
+            ],
+            100,
+            &config,
+        );
+        assert!(gestures.is_empty());
+        assert!(has(
+            &out,
+            InputEventKind::AbsAxis(Axis::ABS_MT_TRACKING_ID),
+            11
+        ));
+        assert!(has(
+            &out,
+            InputEventKind::AbsAxis(Axis::ABS_MT_POSITION_X),
+            600
+        ));
+    }
+
     #[test]
     fn incomplete_coordinates_and_invalid_slots_are_not_forwarded() {
         let mut s = state();

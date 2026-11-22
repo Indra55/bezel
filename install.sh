@@ -73,6 +73,13 @@ else
     INSTALL_MODE="download"
 fi
 
+# Stage on the destination filesystem so replacing the binary is atomic.
+mkdir -p -- "${BIN_DEST%/*}"
+stage_dir=$(mktemp -d -- "${BIN_DEST%/*}/.bezel-install.XXXXXX")
+trap 'rm -rf -- "$stage_dir"' EXIT
+staged_binary="$stage_dir/bin/bezel"
+mkdir -- "$stage_dir/bin"
+
 if [ "$INSTALL_MODE" = "source" ]; then
     install_stage 1 "Build from local source"
     if ! command -v cargo &> /dev/null; then
@@ -81,14 +88,7 @@ if [ "$INSTALL_MODE" = "source" ]; then
     fi
     cargo build --release --manifest-path "$SCRIPT_DIR/Cargo.toml"
     install_stage 2 "Install binary"
-    mkdir -p ~/.local/bin
-    if [ -f "$BIN_DEST" ]; then
-        echo "      Backing up existing binary to $BIN_DEST.bak"
-        cp "$BIN_DEST" "$BIN_DEST.bak"
-        rm -f "$BIN_DEST"
-    fi
-    cp "$SCRIPT_DIR/target/release/bezel" ~/.local/bin/
-    BIN_DEST="$HOME/.local/bin/bezel"
+    cp -- "$SCRIPT_DIR/target/release/bezel" "$staged_binary"
 else
     install_stage 1 "Find latest release"
     REMOTE_VERSION=$(curl -w "%{url_effective}\n" -I -L -s -S "$REPO_URL/releases/latest" -o /dev/null | awk -F '/' '{print $NF}')
@@ -104,29 +104,30 @@ else
     fi
 
     install_stage 2 "Download and install binary"
-    mkdir -p ~/.local/bin
-
-    if [ -f "$BIN_DEST" ]; then
-        echo "      Backing up existing binary to $BIN_DEST.bak"
-        cp "$BIN_DEST" "$BIN_DEST.bak"
-        rm -f "$BIN_DEST"
-    fi
-
-    if ! curl -sSfL "$LATEST_RELEASE_URL" -o "$HOME/.local/bin/bezel"; then
+    if ! curl -sSfL "$LATEST_RELEASE_URL" -o "$staged_binary"; then
         echo "      Prebuilt binary not found (release may not exist yet)."
         if command -v cargo &> /dev/null; then
             echo "      Cargo detected. Falling back to source build..."
-            cargo install --git "$REPO_URL" --root "$HOME/.local"
-            BIN_DEST="$HOME/.local/bin/bezel"
+            rm -f -- "$staged_binary"
+            cargo install --git "$REPO_URL" --root "$stage_dir"
         else
             echo "Error: Failed to download prebuilt binary."
             exit 1
         fi
-    else
-        chmod +x "$HOME/.local/bin/bezel"
-        BIN_DEST="$HOME/.local/bin/bezel"
     fi
 fi
+
+if [ ! -f "$staged_binary" ] || ! IFS= LC_ALL=C read -r -N 4 magic < "$staged_binary" || [[ "$magic" != $'\x7fELF' ]]; then
+    echo "Error: Staged Bezel binary is missing or is not an ELF file." >&2
+    exit 1
+fi
+chmod +x -- "$staged_binary"
+if [ -f "$BIN_DEST" ]; then
+    echo "      Backing up existing binary to $BIN_DEST.bak"
+    cp -p -- "$BIN_DEST" "$stage_dir/bezel.bak"
+    mv -fT -- "$stage_dir/bezel.bak" "$BIN_DEST.bak"
+fi
+mv -fT -- "$staged_binary" "$BIN_DEST"
 
 if [[ ":$PATH:" != *":$(dirname "$BIN_DEST"):"* ]]; then
     echo "      NOTE: $(dirname "$BIN_DEST") is not in your PATH. Add it to your shell profile."

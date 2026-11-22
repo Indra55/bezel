@@ -162,8 +162,9 @@ class CliTests(unittest.TestCase):
         custom.write_text(f"[device]\npath='{missing_device}'\n")
         self.config.write_text('invalid default config')
         code, stdout, stderr = self.run_cli('--config', custom.name)
+        self.assertNotEqual(code, 0)
         self.assertIn('Starting Bezel daemon', stdout + stderr)
-        self.assertIn('Failed to open ' + str(missing_device), stdout + stderr)
+        self.assertIn('Failed to open ' + str(missing_device), stderr)
         self.assertNotIn('Failed to parse config.toml', stderr)
 
     def test_invalid_flag_combinations_do_not_start_daemon(self):
